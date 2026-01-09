@@ -76,6 +76,126 @@ while ($row = mysqli_fetch_assoc($stock_query)) {
     $stock_data[$row['id']] = $row['total_stock'];
 }
 
+/* ===============================
+   HANDLE EDIT FORM SUBMISSION (AJAX)
+================================ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_medicine') {
+    if ($_SESSION['role'] !== 'pharmacist') {
+        echo json_encode(['success' => false, 'message' => 'Permission denied']);
+        exit;
+    }
+
+    $id = intval($_POST['id'] ?? 0);
+    $name = mysqli_real_escape_string($conn, trim($_POST['name'] ?? ''));
+    $category_id = intval($_POST['category_id'] ?? 0);
+    $type_id = intval($_POST['type_id'] ?? 0);
+    $generic_id = intval($_POST['generic_id'] ?? 0);
+    $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
+
+    // Validate
+    if ($id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid medicine ID']);
+        exit;
+    }
+
+    if (empty($name)) {
+        echo json_encode(['success' => false, 'message' => 'Medicine name is required']);
+        exit;
+    }
+
+    if ($category_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Category is required']);
+        exit;
+    }
+
+    if ($type_id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Type is required']);
+        exit;
+    }
+
+    // Update medicine
+    $update_query = "UPDATE medicines SET 
+        name = '$name',
+        category_id = $category_id,
+        type_id = $type_id,
+        generic_id = " . ($generic_id > 0 ? $generic_id : "NULL") . ",
+        description = '$description',
+        updated_at = NOW()
+        WHERE id = $id";
+
+    if (mysqli_query($conn, $update_query)) {
+        echo json_encode(['success' => true, 'message' => 'Medicine updated successfully']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
+    }
+    exit;
+}
+
+/* ===============================
+   FETCH DATA FOR EDIT MODAL (AJAX)
+================================ */
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_medicine') {
+    if ($_SESSION['role'] !== 'pharmacist') {
+        echo json_encode(['success' => false, 'message' => 'Permission denied']);
+        exit;
+    }
+
+    $id = intval($_GET['id'] ?? 0);
+
+    if ($id <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid medicine ID']);
+        exit;
+    }
+
+    // Fetch medicine details
+    $medicine_query = mysqli_query(
+        $conn,
+        "SELECT m.*, c.name AS category_name, t.name AS type_name, g.name AS generic_name
+         FROM medicines m
+         LEFT JOIN medicine_categories c ON m.category_id = c.id
+         LEFT JOIN medicine_types t ON m.type_id = t.id
+         LEFT JOIN medicine_generics g ON m.generic_id = g.id
+         WHERE m.id = $id"
+    );
+
+    if ($medicine = mysqli_fetch_assoc($medicine_query)) {
+        // Fetch categories, types, generics for dropdowns
+        $categories = mysqli_query($conn, "SELECT * FROM medicine_categories ORDER BY name");
+        $types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
+        $generics = mysqli_query($conn, "SELECT * FROM medicine_generics ORDER BY name");
+
+        $categories_data = [];
+        while ($cat = mysqli_fetch_assoc($categories)) {
+            $categories_data[] = $cat;
+        }
+
+        $types_data = [];
+        while ($type = mysqli_fetch_assoc($types)) {
+            $types_data[] = $type;
+        }
+
+        $generics_data = [];
+        while ($generic = mysqli_fetch_assoc($generics)) {
+            $generics_data[] = $generic;
+        }
+
+        echo json_encode([
+            'success' => true,
+            'medicine' => $medicine,
+            'categories' => $categories_data,
+            'types' => $types_data,
+            'generics' => $generics_data
+        ]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Medicine not found']);
+    }
+    exit;
+}
+
+/* ===============================
+   CONTINUE WITH NORMAL PAGE LOAD
+================================ */
+
 // Apply stock filters after fetching all data
 $filtered_result = [];
 $display_count = 0;
@@ -421,6 +541,50 @@ if ($result && mysqli_num_rows($result) > 0) {
             background: #fee2e2;
             border-left: 4px solid #ef4444;
         }
+
+        /* Edit Modal Styles */
+        .form-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .select-input {
+            width: 100%;
+            padding: 0.75rem 2.5rem 0.75rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            transition: all 0.2s;
+        }
+
+        .select-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
     </style>
 </head>
 
@@ -435,6 +599,22 @@ if ($result && mysqli_num_rows($result) > 0) {
 
         <!-- Main Content -->
         <main class="flex-1 overflow-hidden p-4 lg:p-6">
+            <!-- Success Notification -->
+            <div id="successNotification" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transform transition-all duration-300 translate-x-full">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-check-circle"></i>
+                    <span id="successMessage">Medicine updated successfully!</span>
+                </div>
+            </div>
+
+            <!-- Error Notification -->
+            <div id="errorNotification" class="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transform transition-all duration-300 translate-x-full">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="errorMessage">Error updating medicine!</span>
+                </div>
+            </div>
+
             <!-- Page Header -->
             <div class="glass-card p-6 mb-6">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -625,7 +805,7 @@ if ($result && mysqli_num_rows($result) > 0) {
                                 </th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
+                        <tbody class="divide-y divide-gray-100" id="medicinesTableBody">
                             <?php if (count($filtered_result) > 0): ?>
                                 <?php foreach ($filtered_result as $row):
                                     $medicine_id = $row['id'];
@@ -658,7 +838,7 @@ if ($result && mysqli_num_rows($result) > 0) {
                                         $stock_percent = 100;
                                     }
                                 ?>
-                                    <tr class="table-row group">
+                                    <tr class="table-row group" data-id="<?php echo $row['id']; ?>">
                                         <!-- Medicine Details -->
                                         <td class="px-5 py-4">
                                             <div class="flex items-start space-x-4">
@@ -666,19 +846,19 @@ if ($result && mysqli_num_rows($result) > 0) {
                                                     <i class="fas fa-pills"></i>
                                                 </div>
                                                 <div class="min-w-0 flex-1">
-                                                    <h4 class="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-600 transition-colors">
+                                                    <h4 class="font-semibold text-gray-900 text-sm truncate group-hover:text-blue-600 transition-colors medicine-name">
                                                         <?php echo htmlspecialchars($row['name']); ?>
                                                     </h4>
                                                     <div class="flex items-center gap-2 mt-1">
                                                         <span class="medicine-id">MED-<?php echo str_pad($row['id'], 6, '0', STR_PAD_LEFT); ?></span>
                                                         <?php if (!empty($row['generic_name'])): ?>
-                                                            <span class="text-xs text-blue-600 font-medium truncate">
+                                                            <span class="text-xs text-blue-600 font-medium truncate generic-name">
                                                                 <?php echo htmlspecialchars($row['generic_name']); ?>
                                                             </span>
                                                         <?php endif; ?>
                                                     </div>
                                                     <?php if (!empty($row['type_name'])): ?>
-                                                        <span class="inline-block mt-2 px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded">
+                                                        <span class="inline-block mt-2 px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded type-name">
                                                             <?php echo htmlspecialchars($row['type_name']); ?>
                                                         </span>
                                                     <?php endif; ?>
@@ -689,7 +869,7 @@ if ($result && mysqli_num_rows($result) > 0) {
                                         <!-- Category -->
                                         <td class="px-5 py-4">
                                             <?php if (!empty($row['category_name'])): ?>
-                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 category-name">
                                                     <i class="fas fa-tag mr-1 text-xs"></i>
                                                     <?php echo htmlspecialchars($row['category_name']); ?>
                                                 </span>
@@ -734,11 +914,11 @@ if ($result && mysqli_num_rows($result) > 0) {
 
                                                 <!-- Edit -->
                                                 <?php if ($can_edit): ?>
-                                                    <a href="edit_medicine.php?id=<?php echo $row['id']; ?>"
-                                                        class="action-btn bg-yellow-50 text-yellow-600 hover:bg-yellow-100">
+                                                    <button onclick="openEditModal(<?php echo $row['id']; ?>)"
+                                                        class="action-btn bg-yellow-50 text-yellow-600 hover:bg-yellow-100 edit-btn">
                                                         <i class="fas fa-edit text-xs"></i>
                                                         <span>Edit</span>
-                                                    </a>
+                                                    </button>
                                                 <?php endif; ?>
 
                                                 <!-- Delete -->
@@ -855,33 +1035,106 @@ if ($result && mysqli_num_rows($result) > 0) {
         </main>
     </div>
 
-    <!-- Medicine Details Modal -->
-    <div id="medicineModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 modal-overlay">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden modal-content">
+    <!-- Edit Medicine Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 modal-overlay">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden modal-content">
             <div class="p-6 border-b border-gray-200">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xl font-bold text-gray-900">
-                        <i class="fas fa-pills text-blue-500 mr-2"></i>
-                        <span id="modalMedicineName">Medicine Details</span>
+                        <i class="fas fa-edit text-blue-500 mr-2"></i>
+                        <span id="modalTitle">Edit Medicine</span>
                     </h3>
-                    <div class="flex items-center gap-2">
-                        <button onclick="printMedicineDetails()"
-                            class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-                            <i class="fas fa-print text-gray-600"></i>
-                        </button>
-                        <button onclick="closeModal()"
-                            class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition">
-                            <i class="fas fa-times text-gray-600"></i>
-                        </button>
-                    </div>
+                    <button onclick="closeEditModal()"
+                        class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition">
+                        <i class="fas fa-times text-gray-600"></i>
+                    </button>
                 </div>
             </div>
-            <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)] custom-scrollbar" id="modalContent">
-                <!-- Content will be loaded dynamically -->
-                <div class="text-center py-8">
-                    <i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i>
-                    <p class="text-gray-600 mt-3">Loading medicine details...</p>
-                </div>
+            <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+                <form id="editMedicineForm" class="space-y-6">
+                    <input type="hidden" id="medicineId" name="id">
+                    <input type="hidden" name="action" value="edit_medicine">
+
+                    <!-- Medicine Name -->
+                    <div>
+                        <label for="editName" class="form-label">Medicine Name *</label>
+                        <input type="text"
+                            id="editName"
+                            name="name"
+                            class="form-input"
+                            required
+                            placeholder="Enter medicine name">
+                    </div>
+
+                    <!-- Category and Type -->
+                    <div class="grid md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="editCategory" class="form-label">Category *</label>
+                            <select id="editCategory"
+                                name="category_id"
+                                class="select-input"
+                                required>
+                                <option value="">Select Category</option>
+                                <!-- Categories will be loaded dynamically -->
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="editType" class="form-label">Type *</label>
+                            <select id="editType"
+                                name="type_id"
+                                class="select-input"
+                                required>
+                                <option value="">Select Type</option>
+                                <!-- Types will be loaded dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Generic Name -->
+                    <div>
+                        <label for="editGeneric" class="form-label">Generic Name</label>
+                        <select id="editGeneric"
+                            name="generic_id"
+                            class="select-input">
+                            <option value="">Select Generic</option>
+                            <!-- Generics will be loaded dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label for="editDescription" class="form-label">Description</label>
+                        <textarea id="editDescription"
+                            name="description"
+                            rows="4"
+                            class="form-input"
+                            placeholder="Enter medicine description (usage, side effects, precautions, etc.)"></textarea>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="editLoading" class="text-center py-4 hidden">
+                        <i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i>
+                        <p class="text-gray-600 mt-2">Loading medicine details...</p>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="flex flex-col md:flex-row gap-4 pt-6 border-t border-gray-200">
+                        <button type="submit"
+                            id="saveBtn"
+                            class="gradient-primary text-white px-6 py-4 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-md flex-1">
+                            <i class="fas fa-save"></i>
+                            <span>Save Changes</span>
+                        </button>
+
+                        <button type="button"
+                            onclick="closeEditModal()"
+                            class="px-6 py-4 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-medium flex items-center justify-center gap-2 flex-1">
+                            <i class="fas fa-times"></i>
+                            <span>Cancel</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -915,452 +1168,220 @@ if ($result && mysqli_num_rows($result) > 0) {
     <?php include "../includes/footer.php"; ?>
 
     <script>
-        // Show medicine details
-        async function showMedicineDetails(medicineId) {
-            try {
-                document.getElementById('medicineModal').classList.remove('hidden');
-                document.getElementById('modalContent').innerHTML = `
-                <div class="text-center py-8">
-                    <i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i>
-                    <p class="text-gray-600 mt-3">Loading medicine details...</p>
-                </div>
-            `;
+        // Edit Modal Functions
+        let currentMedicineId = null;
 
-                const response = await fetch(`ajax/get_medicine_details.php?id=${medicineId}`);
+        function openEditModal(medicineId) {
+            currentMedicineId = medicineId;
+            const modal = document.getElementById('editModal');
+            modal.classList.remove('hidden');
+
+            // Show loading state
+            document.getElementById('editLoading').classList.remove('hidden');
+            document.getElementById('editMedicineForm').classList.add('hidden');
+
+            // Reset form
+            document.getElementById('editMedicineForm').reset();
+
+            // Load medicine data
+            loadMedicineData(medicineId);
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.add('hidden');
+            currentMedicineId = null;
+        }
+
+        async function loadMedicineData(medicineId) {
+            try {
+                const response = await fetch(`medicines.php?action=get_medicine&id=${medicineId}`);
                 const data = await response.json();
 
                 if (data.success) {
-                    updateMedicineModal(data);
+                    // Populate form
+                    document.getElementById('medicineId').value = data.medicine.id;
+                    document.getElementById('editName').value = data.medicine.name;
+                    document.getElementById('editDescription').value = data.medicine.description || '';
+
+                    // Populate categories dropdown
+                    const categorySelect = document.getElementById('editCategory');
+                    categorySelect.innerHTML = '<option value="">Select Category</option>';
+                    data.categories.forEach(category => {
+                        const option = document.createElement('option');
+                        option.value = category.id;
+                        option.textContent = category.name;
+                        option.selected = (category.id == data.medicine.category_id);
+                        categorySelect.appendChild(option);
+                    });
+
+                    // Populate types dropdown
+                    const typeSelect = document.getElementById('editType');
+                    typeSelect.innerHTML = '<option value="">Select Type</option>';
+                    data.types.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type.id;
+                        option.textContent = type.name;
+                        option.selected = (type.id == data.medicine.type_id);
+                        typeSelect.appendChild(option);
+                    });
+
+                    // Populate generics dropdown
+                    const genericSelect = document.getElementById('editGeneric');
+                    genericSelect.innerHTML = '<option value="">Select Generic</option>';
+                    data.generics.forEach(generic => {
+                        const option = document.createElement('option');
+                        option.value = generic.id;
+                        option.textContent = generic.name;
+                        option.selected = (generic.id == data.medicine.generic_id);
+                        genericSelect.appendChild(option);
+                    });
+
+                    // Hide loading, show form
+                    document.getElementById('editLoading').classList.add('hidden');
+                    document.getElementById('editMedicineForm').classList.remove('hidden');
+
+                    // Update modal title
+                    document.getElementById('modalTitle').textContent = `Edit ${data.medicine.name}`;
                 } else {
-                    throw new Error(data.message || 'Failed to load medicine details');
+                    showNotification(data.message || 'Failed to load medicine data', 'error');
+                    closeEditModal();
                 }
             } catch (error) {
                 console.error('Error:', error);
-                document.getElementById('modalContent').innerHTML = `
-                <div class="text-center py-8">
-                    <i class="fas fa-exclamation-triangle text-red-500 text-2xl"></i>
-                    <p class="text-gray-600 mt-2">Error loading medicine details</p>
-                    <p class="text-sm text-gray-500 mt-1">${error.message}</p>
-                    <button onclick="closeModal()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg">
-                        Close
-                    </button>
-                </div>
-            `;
+                showNotification('Error loading medicine data', 'error');
+                closeEditModal();
             }
         }
 
-        // Update modal content with medicine data
-        function updateMedicineModal(data) {
-            const medicine = data.medicine;
-            const stockInfo = data.stockInfo;
-            const priceInfo = data.priceInfo;
-            const batches = data.batches;
+        // Handle form submission
+        document.getElementById('editMedicineForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
 
-            // Format dates
-            const formatDate = (dateString) => {
-                if (!dateString) return 'N/A';
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
-            };
+            const formData = new FormData(this);
+            const saveBtn = document.getElementById('saveBtn');
+            const originalText = saveBtn.innerHTML;
 
-            // Format currency
-            const formatCurrency = (amount) => {
-                if (!amount) return 'Rs 0.00';
-                return 'Rs ' + parseFloat(amount).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,');
-            };
-
-            document.getElementById('modalMedicineName').textContent = medicine.name;
-
-            let html = `
-            <div class="space-y-6">
-                <!-- Basic Information -->
-                <div class="glass-card p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-info-circle text-blue-500 mr-2"></i>
-                        Basic Information
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Medicine ID:</span>
-                            <span class="block font-semibold text-gray-800">MED-${String(medicine.id).padStart(6, '0')}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Brand Name:</span>
-                            <span class="block font-semibold text-gray-800">${medicine.name}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Generic Name:</span>
-                            <span class="block font-medium text-blue-600">${medicine.generic_name || 'N/A'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Category:</span>
-                            <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-                                ${medicine.category_name || 'N/A'}
-                            </span>
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Type:</span>
-                            <span class="inline-block px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
-                                ${medicine.type_name || 'N/A'}
-                            </span>
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Created Date:</span>
-                            <span class="block text-gray-800">${formatDate(medicine.created_at)}</span>
-                        </div>
-                    </div>
-                    ${medicine.description ? `
-                    <div class="mt-4 info-item">
-                        <span class="text-sm text-gray-500">Description:</span>
-                        <p class="mt-1 text-gray-700">${medicine.description}</p>
-                    </div>
-                    ` : ''}
-                </div>
-
-                <!-- Stock Information -->
-                <div class="glass-card p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-boxes text-green-500 mr-2"></i>
-                        Stock Information
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Total Stock:</span>
-                            <span class="block font-bold text-xl ${stockInfo.total_stock == 0 ? 'text-red-600' : stockInfo.total_stock < 40 ? 'text-yellow-600' : 'text-green-600'}">
-                                ${stockInfo.total_stock || 0} units
-                            </span>
-                        </div>
-                        ${stockInfo.next_expiry ? `
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Next Expiry:</span>
-                            <span class="block font-semibold ${new Date(stockInfo.next_expiry) - new Date() < 30*24*60*60*1000 ? 'text-red-600' : 'text-gray-800'}">
-                                ${formatDate(stockInfo.next_expiry)}
-                                ${new Date(stockInfo.next_expiry) - new Date() < 30*24*60*60*1000 ? 
-                                    `<br><span class="text-xs text-red-600">(${Math.ceil((new Date(stockInfo.next_expiry) - new Date()) / (1000 * 60 * 60 * 24))} days left)</span>` : ''}
-                            </span>
-                        </div>
-                        ` : ''}
-                        ${stockInfo.low_stock_batches > 0 ? `
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Low Stock Batches:</span>
-                            <span class="block font-semibold text-red-600">${stockInfo.low_stock_batches}</span>
-                        </div>
-                        ` : ''}
-                        ${stockInfo.expiring_soon > 0 ? `
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Expiring Soon (30 days):</span>
-                            <span class="block font-semibold text-yellow-600">${stockInfo.expiring_soon} batches</span>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-
-                <!-- Price Information -->
-                <div class="glass-card p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-tag text-purple-500 mr-2"></i>
-                        Price Information
-                    </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Purchase Price:</span>
-                            <span class="block font-bold text-lg text-blue-600">
-                                ${priceInfo.min_purchase ? formatCurrency(priceInfo.min_purchase) + (priceInfo.max_purchase > priceInfo.min_purchase ? ' - ' + formatCurrency(priceInfo.max_purchase) : '') : 'N/A'}
-                            </span>
-                            ${priceInfo.avg_purchase ? `
-                            <span class="text-xs text-gray-500">Avg: ${formatCurrency(priceInfo.avg_purchase)}</span>
-                            ` : ''}
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">Selling Price:</span>
-                            <span class="block font-bold text-lg text-green-600">
-                                ${priceInfo.min_selling ? formatCurrency(priceInfo.min_selling) + (priceInfo.max_selling > priceInfo.min_selling ? ' - ' + formatCurrency(priceInfo.max_selling) : '') : 'N/A'}
-                            </span>
-                            ${priceInfo.avg_selling ? `
-                            <span class="text-xs text-gray-500">Avg: ${formatCurrency(priceInfo.avg_selling)}</span>
-                            ` : ''}
-                        </div>
-                        <div class="info-item">
-                            <span class="text-sm text-gray-500">MRP:</span>
-                            <span class="block font-bold text-lg text-purple-600">
-                                ${priceInfo.min_mrp ? formatCurrency(priceInfo.min_mrp) + (priceInfo.max_mrp > priceInfo.min_mrp ? ' - ' + formatCurrency(priceInfo.max_mrp) : '') : 'N/A'}
-                            </span>
-                            ${priceInfo.avg_mrp ? `
-                            <span class="text-xs text-gray-500">Avg: ${formatCurrency(priceInfo.avg_mrp)}</span>
-                            ` : ''}
-                        </div>
-                    </div>
-                </div>
-        `;
-
-            // Add stock batches if available
-            if (batches && batches.length > 0) {
-                html += `
-                <div class="glass-card p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-layer-group text-yellow-500 mr-2"></i>
-                        Stock Batches (${batches.length})
-                    </h4>
-                    <div class="overflow-x-auto">
-                        <table class="w-full">
-                            <thead>
-                                <tr class="bg-gray-50">
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Batch No</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expiry Date</th>
-                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Supplier</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
+            // Show loading state
+            saveBtn.innerHTML = `
+                <i class="fas fa-spinner fa-spin mr-2"></i>
+                <span>Saving...</span>
             `;
+            saveBtn.disabled = true;
 
-                batches.forEach(batch => {
-                    const expiryDate = new Date(batch.expiry_date);
-                    const today = new Date();
-                    const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-
-                    let rowClass = 'batch-row';
-                    if (daysUntilExpiry <= 30) {
-                        rowClass += ' expiring-soon';
-                    }
-                    if (batch.quantity <= 10) {
-                        rowClass += ' low-quantity';
-                    }
-
-                    html += `
-                    <tr class="${rowClass}">
-                        <td class="px-4 py-3">
-                            <span class="font-medium text-gray-800">${batch.batch_no}</span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="font-bold ${batch.quantity <= 10 ? 'text-red-600' : 'text-gray-800'}">${batch.quantity} units</span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="${daysUntilExpiry <= 30 ? 'text-red-600 font-semibold' : 'text-gray-800'}">
-                                ${formatDate(batch.expiry_date)}
-                                ${daysUntilExpiry <= 30 ? `<br><span class="text-xs">(${daysUntilExpiry} days left)</span>` : ''}
-                            </span>
-                        </td>
-                        <td class="px-4 py-3">
-                            <span class="text-gray-700">${batch.supplier_name || 'N/A'}</span>
-                        </td>
-                    </tr>
-                `;
+            try {
+                const response = await fetch('medicines.php', {
+                    method: 'POST',
+                    body: formData
                 });
 
-                html += `
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
+                const data = await response.json();
+
+                if (data.success) {
+                    // Show success notification
+                    showNotification(data.message || 'Medicine updated successfully!', 'success');
+
+                    // Update the table row in real-time
+                    updateTableRow(formData);
+
+                    // Close modal after a short delay
+                    setTimeout(() => {
+                        closeEditModal();
+                    }, 1500);
+                } else {
+                    showNotification(data.message || 'Failed to update medicine', 'error');
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showNotification('Error updating medicine', 'error');
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
+        });
+
+        // Update table row after successful edit
+        function updateTableRow(formData) {
+            const medicineId = formData.get('id');
+            const row = document.querySelector(`tr[data-id="${medicineId}"]`);
+
+            if (row) {
+                // Update medicine name
+                const nameElement = row.querySelector('.medicine-name');
+                if (nameElement) {
+                    nameElement.textContent = formData.get('name');
+                }
+
+                // Update description in data attribute if needed
+                row.dataset.description = formData.get('description') || '';
+
+                // Note: Category, type, and generic names would need to be fetched from server
+                // or you could reload the page: window.location.reload();
+
+                // For now, we'll reload the page to show all updated data
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type = 'success') {
+            if (type === 'success') {
+                const notification = document.getElementById('successNotification');
+                document.getElementById('successMessage').textContent = message;
+                notification.classList.remove('hidden', 'translate-x-full');
+                notification.classList.add('translate-x-0');
+
+                setTimeout(() => {
+                    notification.classList.remove('translate-x-0');
+                    notification.classList.add('translate-x-full');
+                    setTimeout(() => {
+                        notification.classList.add('hidden');
+                    }, 300);
+                }, 3000);
             } else {
-                html += `
-                <div class="glass-card p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                        <i class="fas fa-layer-group text-yellow-500 mr-2"></i>
-                        Stock Batches
-                    </h4>
-                    <div class="text-center py-8">
-                        <i class="fas fa-box-open text-gray-300 text-3xl mb-3"></i>
-                        <p class="text-gray-500">No active stock batches found</p>
-                    </div>
-                </div>
-            `;
+                const notification = document.getElementById('errorNotification');
+                document.getElementById('errorMessage').textContent = message;
+                notification.classList.remove('hidden', 'translate-x-full');
+                notification.classList.add('translate-x-0');
+
+                setTimeout(() => {
+                    notification.classList.remove('translate-x-0');
+                    notification.classList.add('translate-x-full');
+                    setTimeout(() => {
+                        notification.classList.add('hidden');
+                    }, 300);
+                }, 3000);
             }
-
-            // Add action buttons
-            html += `
-                <div class="flex flex-wrap gap-3">
-                    <a href="stock.php?medicine_id=${medicine.id}"
-                        class="gradient-primary text-white px-5 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center gap-2">
-                        <i class="fas fa-boxes"></i>
-                        <span>View Stock Details</span>
-                    </a>
-                    ${<?php echo $can_edit ? 'true' : 'false'; ?> ? `
-                    <a href="edit_medicine.php?id=${medicine.id}"
-                        class="gradient-warning text-white px-5 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center gap-2">
-                        <i class="fas fa-edit"></i>
-                        <span>Edit Medicine</span>
-                    </a>
-                    ` : ''}
-                    ${<?php echo $can_delete ? 'true' : 'false'; ?> ? `
-                    <button onclick="confirmDelete(${medicine.id}, '${medicine.name.replace(/'/g, "\\'")}')"
-                        class="gradient-danger text-white px-5 py-3 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center gap-2">
-                        <i class="fas fa-trash-alt"></i>
-                        <span>Delete Medicine</span>
-                    </button>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-
-            document.getElementById('modalContent').innerHTML = html;
         }
 
-        // Print medicine details
-        function printMedicineDetails() {
-            const modalContent = document.getElementById('modalContent').innerHTML;
-            const medicineName = document.getElementById('modalMedicineName').textContent;
-
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>${medicineName} - Details</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 20px; }
-                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-                    .section { margin-bottom: 20px; }
-                    .section-title { font-weight: bold; color: #333; margin-bottom: 10px; }
-                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-                    .info-item { margin-bottom: 8px; }
-                    .label { color: #666; font-size: 14px; }
-                    .value { font-weight: bold; }
-                    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                    th { background: #f5f5f5; }
-                    .actions { margin-top: 30px; text-align: center; }
-                    @media print {
-                        @page { margin: 15mm; }
-                        .no-print { display: none; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>${medicineName}</h1>
-                    <p>Medicine Details Report - Generated on ${new Date().toLocaleDateString()}</p>
-                </div>
-                <div>${modalContent}</div>
-                <div class="actions no-print">
-                    <button onclick="window.print()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        Print Report
-                    </button>
-                    <button onclick="window.close()" style="padding: 10px 20px; background: #6b7280; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-                        Close
-                    </button>
-                </div>
-                <script>
-                    window.onload = function() {
-                        // Hide buttons after printing starts
-                        window.addEventListener('beforeprint', () => {
-                            document.querySelector('.actions').style.display = 'none';
-                        });
-                    };
-                <\/script>
-            </body>
-            </html>
-        `);
-            printWindow.document.close();
-        }
-
+        // Rest of your existing functions...
         // Confirm delete
         function confirmDelete(id, name) {
             document.getElementById('deleteModal').classList.remove('hidden');
             document.getElementById('deleteMessage').innerHTML = `
-            Are you sure you want to delete <strong class="text-red-600">${name}</strong>?<br>
-            This will also delete all associated stock records. This action cannot be undone.
-        `;
+                Are you sure you want to delete <strong class="text-red-600">${name}</strong>?<br>
+                This will also delete all associated stock records. This action cannot be undone.
+            `;
             document.getElementById('deleteLink').href = `delete_medicine.php?id=${id}`;
-        }
-
-        // Close modals
-        function closeModal() {
-            document.getElementById('medicineModal').classList.add('hidden');
         }
 
         function closeDeleteModal() {
             document.getElementById('deleteModal').classList.add('hidden');
         }
 
-        // Export to CSV
-        function exportToCSV() {
-            const rows = [];
-            const headers = ['ID', 'Medicine Name', 'Generic Name', 'Category', 'Type', 'Stock', 'Status'];
-
-            <?php foreach ($filtered_result as $row): ?>
-                <?php
-                $medicine_id = $row['id'];
-                $total_stock = isset($stock_data[$medicine_id]) ? $stock_data[$medicine_id] : 0;
-
-                if ($total_stock == 0) {
-                    $stock_status = 'No Stock';
-                } elseif ($total_stock < $low_stock_threshold) {
-                    $stock_status = 'Low Stock';
-                } elseif ($total_stock < $full_stock_threshold) {
-                    $stock_status = 'Medium';
-                } else {
-                    $stock_status = 'Good Stock';
-                }
-                ?>
-                rows.push([
-                    'MED-<?php echo str_pad($row['id'], 6, '0', STR_PAD_LEFT); ?>',
-                    '<?php echo addslashes($row['name']); ?>',
-                    '<?php echo addslashes($row['generic_name'] ?? 'N/A'); ?>',
-                    '<?php echo addslashes($row['category_name'] ?? 'N/A'); ?>',
-                    '<?php echo addslashes($row['type_name'] ?? 'N/A'); ?>',
-                    '<?php echo $total_stock; ?>',
-                    '<?php echo $stock_status; ?>'
-                ]);
-            <?php endforeach; ?>
-
-            let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += headers.join(",") + "\n";
-            rows.forEach(row => {
-                csvContent += row.join(",") + "\n";
-            });
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `medicines_${new Date().toISOString().slice(0,10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            showNotification('CSV exported successfully!', 'success');
-        }
-
-        // Show notification
-        function showNotification(message, type = 'success') {
-            const notification = document.createElement('div');
-            notification.className = `fixed top-6 right-6 px-6 py-3 rounded-xl shadow-lg text-white font-medium z-50 animate-slideIn ${
-            type === 'success' ? 'bg-gradient-to-r from-green-500 to-emerald-600' :
-            type === 'error' ? 'bg-gradient-to-r from-red-500 to-red-600' :
-            'bg-gradient-to-r from-blue-500 to-blue-600'
-        }`;
-            notification.innerHTML = `
-            <div class="flex items-center gap-3">
-                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
-                <span>${message}</span>
-            </div>
-        `;
-            document.body.appendChild(notification);
-
-            setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
-
         // Close modals on ESC key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                closeModal();
+                closeEditModal();
                 closeDeleteModal();
             }
         });
 
         // Close modal when clicking outside
-        document.getElementById('medicineModal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
+        document.getElementById('editModal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditModal();
         });
 
         document.getElementById('deleteModal').addEventListener('click', function(e) {
