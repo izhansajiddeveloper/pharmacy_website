@@ -11,13 +11,14 @@ if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
 
 $medicineId = intval($_GET['id']);
 
-// Fetch medicine details
+// Fetch medicine details WITH generic name
 $medicineQuery = mysqli_query(
     $conn,
-    "SELECT m.*, c.name AS category_name, t.name AS type_name
+    "SELECT m.*, c.name AS category_name, t.name AS type_name, g.name AS generic_name
      FROM medicines m
      LEFT JOIN medicine_categories c ON m.category_id = c.id
      LEFT JOIN medicine_types t ON m.type_id = t.id
+     LEFT JOIN medicine_generics g ON m.generic_id = g.id
      WHERE m.id = $medicineId"
 );
 

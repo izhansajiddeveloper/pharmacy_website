@@ -51,13 +51,13 @@ $query = "
         rt.batch_no,
         rt.quantity,
         rt.purchase_price,
-        COALESCE(rt.return_amount, 0) as return_amount,  -- This is now TOTAL amount
+        COALESCE(rt.return_amount, 0) AS return_amount,
         rt.return_reason,
         rt.return_notes,
         rt.returned_by,
         rt.returned_at,
         m.name AS medicine_name,
-        m.generic_name,
+        mg.name AS generic_name,  -- updated to join medicine_generics
         u.username AS returned_by_name,
         s.name AS supplier_name,
         s.phone AS supplier_phone,
@@ -68,11 +68,13 @@ $query = "
         DATEDIFF(rt.returned_at, sb.expiry_date) AS days_after_expiry
     FROM returns_to_company rt
     JOIN medicines m ON rt.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id  -- join generic table
     JOIN users u ON rt.returned_by = u.id
     JOIN stock_batches sb ON rt.batch_id = sb.id
     LEFT JOIN suppliers s ON sb.supplier_id = s.id
     ORDER BY rt.returned_at DESC
 ";
+
 
 $result = mysqli_query($conn, $query);
 $returns = [];
@@ -229,28 +231,30 @@ function printReturnReceipt($conn, $return_id)
     $return_id = mysqli_real_escape_string($conn, $return_id);
 
     $receipt_query = "
-        SELECT 
-            rt.*,
-            m.name AS medicine_name,
-            m.generic_name,
-            u.username AS returned_by_name,
-            s.name AS supplier_name,
-            s.phone AS supplier_phone,
-            s.email AS supplier_email,
-            s.address AS supplier_address,
-            sb.expiry_date,
-            sb.received_date,
-            sb.location,
-            (rt.purchase_price * rt.quantity) AS total_value,
-            COALESCE(rt.return_amount, 0) AS total_return_amount,
-            (COALESCE(rt.return_amount, 0) / NULLIF(rt.quantity, 0)) AS return_amount_per_unit
-        FROM returns_to_company rt
-        JOIN medicines m ON rt.medicine_id = m.id
-        JOIN users u ON rt.returned_by = u.id
-        JOIN stock_batches sb ON rt.batch_id = sb.id
-        LEFT JOIN suppliers s ON sb.supplier_id = s.id
-        WHERE rt.id = '$return_id'
-    ";
+    SELECT 
+        rt.*,
+        m.name AS medicine_name,
+        mg.name AS generic_name,   -- replaced m.generic_name with mg.name
+        u.username AS returned_by_name,
+        s.name AS supplier_name,
+        s.phone AS supplier_phone,
+        s.email AS supplier_email,
+        s.address AS supplier_address,
+        sb.expiry_date,
+        sb.received_date,
+        sb.location,
+        (rt.purchase_price * rt.quantity) AS total_value,
+        COALESCE(rt.return_amount, 0) AS total_return_amount,
+        (COALESCE(rt.return_amount, 0) / NULLIF(rt.quantity, 0)) AS return_amount_per_unit
+    FROM returns_to_company rt
+    JOIN medicines m ON rt.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id  -- join generic table
+    JOIN users u ON rt.returned_by = u.id
+    JOIN stock_batches sb ON rt.batch_id = sb.id
+    LEFT JOIN suppliers s ON sb.supplier_id = s.id
+    WHERE rt.id = '$return_id'
+";
+
 
     $receipt_result = mysqli_query($conn, $receipt_query);
     $receipt_data = mysqli_fetch_assoc($receipt_result);

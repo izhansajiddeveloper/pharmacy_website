@@ -12,43 +12,88 @@ if ($_SESSION['role'] !== 'pharmacist') {
 $success = false;
 $error = '';
 
-// Fetch categories, types, and unique generic names
-$categories = mysqli_query($conn, "SELECT * FROM medicine_categories ORDER BY name");
-$types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
-$generic_names_result = mysqli_query($conn, "SELECT DISTINCT generic_name FROM medicines WHERE generic_name != '' ORDER BY generic_name");
+// Handle modal form submissions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Check which form was submitted
+    if (isset($_POST['add_category'])) {
+        $category_name = trim($_POST['category_name'] ?? '');
+        $category_desc = trim($_POST['category_description'] ?? '');
 
-if (isset($_POST['submit'])) {
-    $name = trim($_POST['name'] ?? '');
-    $generic_name = trim($_POST['generic_name'] ?? '');
-    $category_id = intval($_POST['category_id'] ?? 0);
-    $type_id = intval($_POST['type_id'] ?? 0);
-    $description = trim($_POST['description'] ?? '');
-
-    // Validate required fields
-    if (empty($name) || empty($generic_name) || empty($category_id) || empty($type_id)) {
-        $error = "Please fill in all required fields.";
-    } else {
-        // Use prepared statement — matches EXACT table structure
-        $stmt = $conn->prepare("
-            INSERT INTO medicines (name, generic_name, category_id, type_id, description, created_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
-        ");
-
-        if ($stmt) {
-            $stmt->bind_param('sssis', $name, $generic_name, $category_id, $type_id, $description);
-
+        if (!empty($category_name)) {
+            $stmt = $conn->prepare("INSERT INTO medicine_categories (name, description) VALUES (?, ?)");
+            $stmt->bind_param('ss', $category_name, $category_desc);
             if ($stmt->execute()) {
-                $success = true;
-                $new_medicine_id = $stmt->insert_id;
-                // Use PRG to avoid resubmission and clear POST
-                header("Location: add_medicine.php?success=1&medicine_id=" . $new_medicine_id);
-                exit;
+                $_SESSION['modal_success'] = "Category added successfully!";
             } else {
-                $error = "Database error: " . $stmt->error;
+                $_SESSION['modal_error'] = "Failed to add category: " . $stmt->error;
             }
             $stmt->close();
+        }
+    }
+
+    if (isset($_POST['add_type'])) {
+        $type_name = trim($_POST['type_name'] ?? '');
+        $type_desc = trim($_POST['type_description'] ?? '');
+
+        if (!empty($type_name)) {
+            $stmt = $conn->prepare("INSERT INTO medicine_types (name, description) VALUES (?, ?)");
+            $stmt->bind_param('ss', $type_name, $type_desc);
+            if ($stmt->execute()) {
+                $_SESSION['modal_success'] = "Type added successfully!";
+            } else {
+                $_SESSION['modal_error'] = "Failed to add type: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
+
+    if (isset($_POST['add_generic'])) {
+        $generic_name = trim($_POST['generic_name'] ?? '');
+
+        if (!empty($generic_name)) {
+            $stmt = $conn->prepare("INSERT INTO medicine_generics (name, created_at) VALUES (?, NOW())");
+            $stmt->bind_param('s', $generic_name);
+            if ($stmt->execute()) {
+                $_SESSION['modal_success'] = "Generic added successfully!";
+            } else {
+                $_SESSION['modal_error'] = "Failed to add generic: " . $stmt->error;
+            }
+            $stmt->close();
+        }
+    }
+
+    // Handle main medicine form submission
+    if (isset($_POST['submit'])) {
+        $name = trim($_POST['name'] ?? '');
+        $generic_id = intval($_POST['generic_id'] ?? 0);
+        $category_id = intval($_POST['category_id'] ?? 0);
+        $type_id = intval($_POST['type_id'] ?? 0);
+        $description = trim($_POST['description'] ?? '');
+
+        // Validate required fields
+        if (empty($name) || empty($generic_id) || empty($category_id) || empty($type_id)) {
+            $error = "Please fill in all required fields.";
         } else {
-            $error = "Failed to prepare statement: " . $conn->error;
+            $stmt = $conn->prepare("
+                INSERT INTO medicines (name, generic_id, category_id, type_id, description, created_at)
+                VALUES (?, ?, ?, ?, ?, NOW())
+            ");
+
+            if ($stmt) {
+                $stmt->bind_param('siiis', $name, $generic_id, $category_id, $type_id, $description);
+
+                if ($stmt->execute()) {
+                    $success = true;
+                    $new_medicine_id = $stmt->insert_id;
+                    header("Location: add_medicine.php?success=1&medicine_id=" . $new_medicine_id);
+                    exit;
+                } else {
+                    $error = "Database error: " . $stmt->error;
+                }
+                $stmt->close();
+            } else {
+                $error = "Failed to prepare statement: " . $conn->error;
+            }
         }
     }
 }
@@ -58,6 +103,31 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
     $success = true;
     $new_medicine_id = intval($_GET['medicine_id'] ?? 0);
 }
+
+// Fetch categories, types, and generics
+$categories = mysqli_query($conn, "SELECT * FROM medicine_categories ORDER BY name");
+$types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
+$generics = mysqli_query($conn, "SELECT id, name FROM medicine_generics ORDER BY name");
+
+// Store data for JavaScript
+$category_data = [];
+$type_data = [];
+$generic_data = [];
+
+while ($cat = mysqli_fetch_assoc($categories)) {
+    $category_data[] = $cat;
+}
+mysqli_data_seek($categories, 0);
+
+while ($type = mysqli_fetch_assoc($types)) {
+    $type_data[] = $type;
+}
+mysqli_data_seek($types, 0);
+
+while ($gen = mysqli_fetch_assoc($generics)) {
+    $generic_data[] = $gen;
+}
+mysqli_data_seek($generics, 0);
 ?>
 
 <!DOCTYPE html>
@@ -154,42 +224,89 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
             z-index: -1;
         }
 
-        .badge-category {
-            background: linear-gradient(135deg, var(--accent-blue), #1d4ed8);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            z-index: 1000;
         }
 
-        .badge-type {
-            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: none;
+            z-index: 1001;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
-        .relative-select {
+        .modal.active,
+        .modal-backdrop.active {
+            display: block;
+        }
+
+        .dropdown-search-container {
             position: relative;
         }
 
-        .relative-select select {
-            appearance: none;
-            padding-right: 2.5rem;
+        .dropdown-search-input {
+            width: 100%;
+            padding: 0.5rem 2.5rem 0.5rem 0.75rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
         }
 
-        .relative-select i {
+        .dropdown-search-icon {
             position: absolute;
-            right: 1rem;
+            right: 0.75rem;
             top: 50%;
             transform: translateY(-50%);
-            pointer-events: none;
             color: #9ca3af;
+        }
+
+        .dropdown-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .dropdown-options.active {
+            display: block;
+        }
+
+        .dropdown-option {
+            padding: 0.5rem 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .dropdown-option:hover {
+            background: #f3f4f6;
+        }
+
+        .dropdown-option.selected {
+            background: #fef3c7;
         }
     </style>
 </head>
@@ -198,6 +315,174 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
     <!-- Background Blobs -->
     <div class="yellow-blob top-20 right-10"></div>
     <div class="gray-blob bottom-20 left-10"></div>
+
+    <!-- Modals -->
+    <!-- Manage Categories Modal -->
+    <div class="modal-backdrop" id="categoriesModalBackdrop"></div>
+    <div class="modal" id="categoriesModal">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">Manage Categories</h3>
+                <button onclick="closeModal('categoriesModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium text-gray-700 mb-3">Add New Category</h4>
+                <form method="POST" id="addCategoryForm">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Category Name *</label>
+                            <input type="text" name="category_name" required
+                                class="w-full px-4 py-2 rounded-lg border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea name="category_description" rows="3"
+                                class="w-full px-4 py-2 rounded-lg border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none"></textarea>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeModal('categoriesModal')"
+                                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" name="add_category"
+                                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
+                                Add Category
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <h4 class="font-medium text-gray-700 mb-3">Existing Categories</h4>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <?php foreach ($category_data as $cat): ?>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <span class="font-medium text-gray-800"><?php echo htmlspecialchars($cat['name']); ?></span>
+                                <?php if (!empty($cat['description'])): ?>
+                                    <p class="text-xs text-gray-600 mt-1"><?php echo htmlspecialchars($cat['description']); ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">ID: <?php echo $cat['id']; ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Types Modal -->
+    <div class="modal-backdrop" id="typesModalBackdrop"></div>
+    <div class="modal" id="typesModal">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">Manage Types</h3>
+                <button onclick="closeModal('typesModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium text-gray-700 mb-3">Add New Type</h4>
+                <form method="POST" id="addTypeForm">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Type Name *</label>
+                            <input type="text" name="type_name" required
+                                class="w-full px-4 py-2 rounded-lg border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea name="type_description" rows="3"
+                                class="w-full px-4 py-2 rounded-lg border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none"></textarea>
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeModal('typesModal')"
+                                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" name="add_type"
+                                class="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+                                Add Type
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <h4 class="font-medium text-gray-700 mb-3">Existing Types</h4>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <?php foreach ($type_data as $type): ?>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <span class="font-medium text-gray-800"><?php echo htmlspecialchars($type['name']); ?></span>
+                                <?php if (!empty($type['description'])): ?>
+                                    <p class="text-xs text-gray-600 mt-1"><?php echo htmlspecialchars($type['description']); ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">ID: <?php echo $type['id']; ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Generics Modal -->
+    <div class="modal-backdrop" id="genericsModalBackdrop"></div>
+    <div class="modal" id="genericsModal">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-gray-800">Manage Generics</h3>
+                <button onclick="closeModal('genericsModal')" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <div class="mb-6">
+                <h4 class="font-medium text-gray-700 mb-3">Add New Generic</h4>
+                <form method="POST" id="addGenericForm">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Generic Name *</label>
+                            <input type="text" name="generic_name" required
+                                class="w-full px-4 py-2 rounded-lg border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none"
+                                placeholder="Enter generic name">
+                        </div>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" onclick="closeModal('genericsModal')"
+                                class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
+                                Cancel
+                            </button>
+                            <button type="submit" name="add_generic"
+                                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                                Add Generic
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div>
+                <h4 class="font-medium text-gray-700 mb-3">Existing Generics</h4>
+                <div class="space-y-2 max-h-60 overflow-y-auto">
+                    <?php foreach ($generic_data as $gen): ?>
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                            <div>
+                                <span class="font-medium text-gray-800"><?php echo htmlspecialchars($gen['name']); ?></span>
+                            </div>
+                            <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">ID: <?php echo $gen['id']; ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Navbar -->
     <?php include "../includes/navbar.php"; ?>
@@ -252,6 +537,27 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                         </div>
                     </div>
                 </div>
+            <?php endif; ?>
+
+            <!-- Modal Success/Error Messages -->
+            <?php if (isset($_SESSION['modal_success'])): ?>
+                <div class="glass-card rounded-2xl p-4 mb-6 animate-fade-in-up bg-gradient-to-r from-green-50 to-green-100 border-l-4 border-green-500">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                        <span><?php echo htmlspecialchars($_SESSION['modal_success']); ?></span>
+                    </div>
+                </div>
+                <?php unset($_SESSION['modal_success']); ?>
+            <?php endif; ?>
+
+            <?php if (isset($_SESSION['modal_error'])): ?>
+                <div class="glass-card rounded-2xl p-4 mb-6 animate-fade-in-up bg-gradient-to-r from-red-50 to-red-100 border-l-4 border-red-500">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle text-red-600 mr-3"></i>
+                        <span><?php echo htmlspecialchars($_SESSION['modal_error']); ?></span>
+                    </div>
+                </div>
+                <?php unset($_SESSION['modal_error']); ?>
             <?php endif; ?>
 
             <!-- Page Header -->
@@ -309,7 +615,6 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                     </h4>
 
                                     <div class="grid md:grid-cols-2 gap-6">
-
                                         <!-- Medicine Name -->
                                         <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -318,53 +623,52 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                                     <span>Medicine Name *</span>
                                                 </span>
                                             </label>
-
                                             <input type="text"
                                                 name="name"
                                                 value="<?php echo isset($_POST['name']) ? htmlspecialchars($_POST['name']) : ''; ?>"
                                                 class="w-full px-4 py-3 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm"
                                                 placeholder="Enter medicine brand name"
                                                 required>
-
                                             <p class="text-xs text-gray-500 mt-2 flex items-center space-x-1">
                                                 <i class="fas fa-lightbulb text-yellow-500"></i>
                                                 <span>Brand/trade name of the medicine</span>
                                             </p>
                                         </div>
 
-                                        <!-- Generic Name Dropdown -->
-                                        <div class="relative">
+                                        <!-- Generic Name Dropdown with Search -->
+                                        <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                                 <span class="flex items-center space-x-2">
                                                     <i class="fas fa-dna text-blue-500 text-sm"></i>
                                                     <span>Generic Name *</span>
                                                 </span>
                                             </label>
-
-                                            <select name="generic_name"
-                                                class="w-full appearance-none px-4 py-3 pr-10 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm"
-                                                required>
-                                                <option value="">Select Generic Name</option>
-                                                <?php while ($gn = mysqli_fetch_assoc($generic_names_result)): ?>
-                                                    <option value="<?php echo htmlspecialchars($gn['generic_name']); ?>"
-                                                        <?php echo (isset($_POST['generic_name']) && $_POST['generic_name'] === $gn['generic_name']) ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($gn['generic_name']); ?>
-                                                    </option>
-                                                <?php endwhile; ?>
-                                            </select>
-
-                                            <!-- Dropdown Icon -->
-                                            <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
-
-                                            <p class="text-xs text-gray-500 mt-2 flex items-center space-x-1">
-                                                <i class="fas fa-lightbulb text-blue-500"></i>
-                                                <span>Scientific/chemical name</span>
-                                            </p>
+                                            <div class="dropdown-search-container">
+                                                <input type="hidden" name="generic_id" id="generic_id" value="<?php echo isset($_POST['generic_id']) ? htmlspecialchars($_POST['generic_id']) : ''; ?>" required>
+                                                <input type="text"
+                                                    id="generic_search"
+                                                    class="dropdown-search-input px-4 py-3 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm w-full"
+                                                    placeholder="Search or select generic name"
+                                                    autocomplete="off">
+                                                <div class="dropdown-search-icon">
+                                                    <i class="fas fa-search"></i>
+                                                </div>
+                                                <div class="dropdown-options" id="generic_options"></div>
+                                            </div>
+                                            <div class="mt-2 flex justify-between items-center">
+                                                <p class="text-xs text-gray-500 flex items-center space-x-1">
+                                                    <i class="fas fa-lightbulb text-blue-500"></i>
+                                                    <span>Scientific/chemical name</span>
+                                                </p>
+                                                <button type="button" onclick="openModal('genericsModal')"
+                                                    class="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1">
+                                                    <i class="fas fa-plus"></i>
+                                                    <span>Add New</span>
+                                                </button>
+                                            </div>
                                         </div>
-
                                     </div>
                                 </div>
-
 
                                 <!-- Classification Section -->
                                 <div>
@@ -374,64 +678,73 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                     </h4>
 
                                     <div class="grid md:grid-cols-2 gap-6">
-
-                                        <!-- Category -->
-                                        <div class="relative">
+                                        <!-- Category Dropdown with Search -->
+                                        <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                                 <span class="flex items-center space-x-2">
                                                     <i class="fas fa-tag text-teal-500 text-sm"></i>
                                                     <span>Category *</span>
                                                 </span>
                                             </label>
-
-                                            <select name="category_id"
-                                                class="w-full appearance-none px-4 py-3 pr-10 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm"
-                                                required>
-                                                <option value="">Select Category</option>
-                                                <?php
-                                                mysqli_data_seek($categories, 0);
-                                                while ($cat = mysqli_fetch_assoc($categories)): ?>
-                                                    <option value="<?php echo $cat['id']; ?>"
-                                                        <?php echo (isset($_POST['category_id']) && $_POST['category_id'] == $cat['id']) ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($cat['name']); ?>
-                                                    </option>
-                                                <?php endwhile; ?>
-                                            </select>
-
-                                            <!-- Dropdown Icon -->
-                                            <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                                            <div class="dropdown-search-container">
+                                                <input type="hidden" name="category_id" id="category_id" value="<?php echo isset($_POST['category_id']) ? htmlspecialchars($_POST['category_id']) : ''; ?>" required>
+                                                <input type="text"
+                                                    id="category_search"
+                                                    class="dropdown-search-input px-4 py-3 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm w-full"
+                                                    placeholder="Search or select category"
+                                                    autocomplete="off">
+                                                <div class="dropdown-search-icon">
+                                                    <i class="fas fa-search"></i>
+                                                </div>
+                                                <div class="dropdown-options" id="category_options"></div>
+                                            </div>
+                                            <div class="mt-2 flex justify-between items-center">
+                                                <p class="text-xs text-gray-500 flex items-center space-x-1">
+                                                    <i class="fas fa-lightbulb text-teal-500"></i>
+                                                    <span>Medicine category</span>
+                                                </p>
+                                                <button type="button" onclick="openModal('categoriesModal')"
+                                                    class="text-xs text-teal-600 hover:text-teal-800 flex items-center space-x-1">
+                                                    <i class="fas fa-plus"></i>
+                                                    <span>Add New</span>
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <!-- Type -->
-                                        <div class="relative">
+                                        <!-- Type Dropdown with Search -->
+                                        <div>
                                             <label class="block text-sm font-medium text-gray-700 mb-2">
                                                 <span class="flex items-center space-x-2">
                                                     <i class="fas fa-prescription-bottle-alt text-purple-500 text-sm"></i>
                                                     <span>Type *</span>
                                                 </span>
                                             </label>
-
-                                            <select name="type_id"
-                                                class="w-full appearance-none px-4 py-3 pr-10 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm"
-                                                required>
-                                                <option value="">Select Type</option>
-                                                <?php
-                                                mysqli_data_seek($types, 0);
-                                                while ($type = mysqli_fetch_assoc($types)): ?>
-                                                    <option value="<?php echo $type['id']; ?>"
-                                                        <?php echo (isset($_POST['type_id']) && $_POST['type_id'] == $type['id']) ? 'selected' : ''; ?>>
-                                                        <?php echo htmlspecialchars($type['name']); ?>
-                                                    </option>
-                                                <?php endwhile; ?>
-                                            </select>
-
-                                            <!-- Dropdown Icon -->
-                                            <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                                            <div class="dropdown-search-container">
+                                                <input type="hidden" name="type_id" id="type_id" value="<?php echo isset($_POST['type_id']) ? htmlspecialchars($_POST['type_id']) : ''; ?>" required>
+                                                <input type="text"
+                                                    id="type_search"
+                                                    class="dropdown-search-input px-4 py-3 rounded-xl border border-yellow-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 focus:outline-none transition bg-white/80 shadow-sm w-full"
+                                                    placeholder="Search or select type"
+                                                    autocomplete="off">
+                                                <div class="dropdown-search-icon">
+                                                    <i class="fas fa-search"></i>
+                                                </div>
+                                                <div class="dropdown-options" id="type_options"></div>
+                                            </div>
+                                            <div class="mt-2 flex justify-between items-center">
+                                                <p class="text-xs text-gray-500 flex items-center space-x-1">
+                                                    <i class="fas fa-lightbulb text-purple-500"></i>
+                                                    <span>Medicine form/type</span>
+                                                </p>
+                                                <button type="button" onclick="openModal('typesModal')"
+                                                    class="text-xs text-purple-600 hover:text-purple-800 flex items-center space-x-1">
+                                                    <i class="fas fa-plus"></i>
+                                                    <span>Add New</span>
+                                                </button>
+                                            </div>
                                         </div>
-
                                     </div>
                                 </div>
-
 
                                 <!-- Manufacturer & Strength Section -->
                                 <div>
@@ -568,8 +881,8 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                     <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.3s">
                         <h3 class="text-lg font-semibold text-gray-800 mb-4">Quick Actions</h3>
                         <div class="space-y-3">
-                            <a href="categories.php"
-                                class="flex items-center justify-between p-3 bg-gradient-to-r from-teal-50 to-teal-100 border border-teal-200 rounded-xl hover:bg-teal-100 transition group shadow-sm">
+                            <button onclick="openModal('categoriesModal')"
+                                class="w-full flex items-center justify-between p-3 bg-gradient-to-r from-teal-50 to-teal-100 border border-teal-200 rounded-xl hover:bg-teal-100 transition group shadow-sm cursor-pointer">
                                 <div class="flex items-center space-x-3">
                                     <div class="w-10 h-10 rounded-lg bg-teal-100 flex items-center justify-center">
                                         <i class="fas fa-tags text-teal-600"></i>
@@ -580,9 +893,9 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                     </div>
                                 </div>
                                 <i class="fas fa-arrow-right text-teal-500 group-hover:translate-x-2 transition-transform"></i>
-                            </a>
-                            <a href="types.php"
-                                class="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200 rounded-xl hover:bg-purple-100 transition group shadow-sm">
+                            </button>
+                            <button onclick="openModal('typesModal')"
+                                class="w-full flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200 rounded-xl hover:bg-purple-100 transition group shadow-sm cursor-pointer">
                                 <div class="flex items-center space-x-3">
                                     <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
                                         <i class="fas fa-prescription-bottle text-purple-600"></i>
@@ -593,9 +906,22 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                                     </div>
                                 </div>
                                 <i class="fas fa-arrow-right text-purple-500 group-hover:translate-x-2 transition-transform"></i>
-                            </a>
+                            </button>
+                            <button onclick="openModal('genericsModal')"
+                                class="w-full flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-xl hover:bg-blue-100 transition group shadow-sm cursor-pointer">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                                        <i class="fas fa-dna text-blue-600"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-medium text-gray-800 text-sm">Manage Generics</h4>
+                                        <p class="text-xs text-gray-600">Add/edit generic names</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-blue-500 group-hover:translate-x-2 transition-transform"></i>
+                            </button>
                             <a href="medicines.php"
-                                class="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl hover:bg-gray-100 transition group shadow-sm">
+                                class="w-full flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl hover:bg-gray-100 transition group shadow-sm">
                                 <div class="flex items-center space-x-3">
                                     <div class="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
                                         <i class="fas fa-list text-gray-600"></i>
@@ -659,16 +985,160 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
     <?php include "../includes/footer.php"; ?>
 
     <script>
+        // Data from PHP
+        const categories = <?php echo json_encode($category_data); ?>;
+        const types = <?php echo json_encode($type_data); ?>;
+        const generics = <?php echo json_encode($generic_data); ?>;
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+            document.getElementById(modalId + 'Backdrop').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            document.getElementById(modalId + 'Backdrop').classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Close modal when clicking backdrop
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+            backdrop.addEventListener('click', function() {
+                const modalId = this.id.replace('Backdrop', '');
+                closeModal(modalId);
+            });
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                document.querySelectorAll('.modal').forEach(modal => {
+                    if (modal.classList.contains('active')) {
+                        const modalId = modal.id;
+                        closeModal(modalId);
+                    }
+                });
+            }
+        });
+
+        // Dropdown search functionality
+        function initializeDropdownSearch(searchInputId, optionsId, hiddenInputId, data, displayField = 'name') {
+            const searchInput = document.getElementById(searchInputId);
+            const optionsDiv = document.getElementById(optionsId);
+            const hiddenInput = document.getElementById(hiddenInputId);
+            let selectedOption = null;
+
+            // Populate options on focus
+            searchInput.addEventListener('focus', function() {
+                populateOptions('');
+                optionsDiv.classList.add('active');
+            });
+
+            // Filter on input
+            searchInput.addEventListener('input', function() {
+                populateOptions(this.value);
+            });
+
+            // Select option
+            function selectOption(item) {
+                selectedOption = item;
+                searchInput.value = item[displayField];
+                hiddenInput.value = item.id;
+                optionsDiv.classList.remove('active');
+                updateProgress(); // Update form progress
+
+                // Highlight selected option
+                optionsDiv.querySelectorAll('.dropdown-option').forEach(opt => {
+                    opt.classList.remove('selected');
+                    if (parseInt(opt.dataset.id) === item.id) {
+                        opt.classList.add('selected');
+                    }
+                });
+            }
+
+            // Populate options based on search
+            function populateOptions(searchTerm) {
+                optionsDiv.innerHTML = '';
+                const filtered = data.filter(item =>
+                    item[displayField].toLowerCase().includes(searchTerm.toLowerCase())
+                );
+
+                if (filtered.length === 0) {
+                    optionsDiv.innerHTML = `
+                        <div class="dropdown-option p-3 text-gray-500 text-center">
+                            No results found
+                        </div>`;
+                    return;
+                }
+
+                filtered.forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = 'dropdown-option';
+                    div.dataset.id = item.id;
+                    div.textContent = item[displayField];
+                    if (item.description) {
+                        const desc = document.createElement('div');
+                        desc.className = 'text-xs text-gray-500 mt-1';
+                        desc.textContent = item.description;
+                        div.appendChild(desc);
+                    }
+                    div.addEventListener('click', () => selectOption(item));
+
+                    // Mark as selected if already chosen
+                    if (parseInt(hiddenInput.value) === item.id) {
+                        div.classList.add('selected');
+                        searchInput.value = item[displayField];
+                    }
+
+                    optionsDiv.appendChild(div);
+                });
+            }
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!searchInput.contains(event.target) && !optionsDiv.contains(event.target)) {
+                    optionsDiv.classList.remove('active');
+                    // If we have a selected option, show its name
+                    if (selectedOption) {
+                        searchInput.value = selectedOption[displayField];
+                    }
+                }
+            });
+
+            // Load initial value if exists
+            const initialValue = hiddenInput.value;
+            if (initialValue) {
+                const item = data.find(d => d.id == initialValue);
+                if (item) {
+                    selectOption(item);
+                }
+            }
+        }
+
+        // Initialize dropdowns when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize dropdown searches
+            initializeDropdownSearch('category_search', 'category_options', 'category_id', categories);
+            initializeDropdownSearch('type_search', 'type_options', 'type_id', types);
+            initializeDropdownSearch('generic_search', 'generic_options', 'generic_id', generics);
+
             const form = document.getElementById('medicineForm');
-            const requiredFields = form.querySelectorAll('[required]');
+            const requiredFields = [
+                document.querySelector('[name="name"]'),
+                document.getElementById('generic_id'),
+                document.getElementById('category_id'),
+                document.getElementById('type_id')
+            ];
+
             const progressBar = document.getElementById('progressBar');
             const requiredCount = document.getElementById('requiredCount');
 
             function updateProgress() {
                 let filled = 0;
                 requiredFields.forEach(field => {
-                    if (field.value.trim() !== '') filled++;
+                    if (field && field.value.trim() !== '') filled++;
                 });
                 const total = requiredFields.length;
                 const progress = (filled / total) * 100;
@@ -680,9 +1150,13 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                     (progress === 100 ? 'bg-green-500' : progress >= 50 ? 'bg-yellow-500' : 'bg-red-500');
             }
 
-            // Listen to both input and change (for dropdowns)
+            // Listen to input changes
             form.addEventListener('input', updateProgress);
-            form.addEventListener('change', updateProgress);
+
+            // Also update when hidden inputs change (for dropdown selections)
+            document.getElementById('generic_id').addEventListener('change', updateProgress);
+            document.getElementById('category_id').addEventListener('change', updateProgress);
+            document.getElementById('type_id').addEventListener('change', updateProgress);
 
             // Initial check
             updateProgress();
@@ -710,6 +1184,30 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
                     const field = form.querySelector(`[name="${name}"]`);
                     if (field) field.value = data[name];
                 });
+
+                // Also set hidden fields and search inputs
+                if (data.generic_id) {
+                    const gen = generics.find(g => g.id == data.generic_id);
+                    if (gen) {
+                        document.getElementById('generic_search').value = gen.name;
+                        document.getElementById('generic_id').value = gen.id;
+                    }
+                }
+                if (data.category_id) {
+                    const cat = categories.find(c => c.id == data.category_id);
+                    if (cat) {
+                        document.getElementById('category_search').value = cat.name;
+                        document.getElementById('category_id').value = cat.id;
+                    }
+                }
+                if (data.type_id) {
+                    const typ = types.find(t => t.id == data.type_id);
+                    if (typ) {
+                        document.getElementById('type_search').value = typ.name;
+                        document.getElementById('type_id').value = typ.id;
+                    }
+                }
+
                 updateProgress();
             }
 
@@ -722,8 +1220,23 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
             window.resetForm = function() {
                 if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
                     form.reset();
+                    // Clear search inputs and hidden fields
+                    document.getElementById('generic_search').value = '';
+                    document.getElementById('generic_id').value = '';
+                    document.getElementById('category_search').value = '';
+                    document.getElementById('category_id').value = '';
+                    document.getElementById('type_search').value = '';
+                    document.getElementById('type_id').value = '';
+
                     localStorage.removeItem('medicineFormDraft');
                     updateProgress();
+
+                    // Show success message
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                    toast.textContent = 'Form reset successfully!';
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 3000);
                 }
             };
         });

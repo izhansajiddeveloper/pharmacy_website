@@ -17,22 +17,53 @@ $can_delete_batch = ($_SESSION['role'] === 'pharmacist');
 $medicine_id = isset($_GET['medicine_id']) ? intval($_GET['medicine_id']) : 0;
 
 // Fetch stock data
-$query = "SELECT sb.*, m.name AS medicine_name, m.generic_name, m.category_id, m.type_id,
-                 c.name AS category_name, t.name AS type_name,
-                 s.name AS supplier_name
-          FROM stock_batches sb
-          JOIN medicines m ON sb.medicine_id = m.id
-          LEFT JOIN medicine_categories c ON m.category_id = c.id
-          LEFT JOIN medicine_types t ON m.type_id = t.id
-          LEFT JOIN suppliers s ON sb.supplier_id = s.id";
 
+// Base query
+$query = "
+    SELECT 
+        sb.*,
+        m.name AS medicine_name,
+        mg.name AS generic_name,
+        m.category_id,
+        m.type_id,
+        c.name AS category_name,
+        t.name AS type_name,
+        s.name AS supplier_name
+    FROM stock_batches sb
+    JOIN medicines m ON sb.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+    LEFT JOIN medicine_categories c ON m.category_id = c.id
+    LEFT JOIN medicine_types t ON m.type_id = t.id
+    LEFT JOIN suppliers s ON sb.supplier_id = s.id
+";
+
+// Filter by medicine_id if provided
 if ($medicine_id > 0) {
-    $query .= " WHERE sb.medicine_id = $medicine_id";
+    $query .= " WHERE sb.medicine_id = ?";
 }
 
+// Always order
 $query .= " ORDER BY sb.expiry_date ASC, sb.received_date DESC";
 
-$result = mysqli_query($conn, $query);
+// Prepare statement to prevent SQL injection
+if ($medicine_id > 0) {
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("i", $medicine_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    $result = $conn->query($query);
+}
+
+// Fetch rows
+$rows = [];
+if ($result) {
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+} else {
+    echo "Query Error: " . $conn->error;
+}
 
 // Get statistics
 $total_batches = mysqli_num_rows($result);
@@ -64,29 +95,39 @@ $low_stock_query = mysqli_query(
      LIMIT 5"
 );
 
-// Get expiring soon batches
-$expiring_soon = mysqli_query(
-    $conn,
-    "SELECT sb.*, m.name as medicine_name
-     FROM stock_batches sb
-     JOIN medicines m ON sb.medicine_id = m.id
-     WHERE sb.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-     ORDER BY sb.expiry_date ASC
-     LIMIT 5"
-);
+
+// Get expiring soon batches (next 30 days)
+$expiring_soon_query = "
+    SELECT sb.*, m.name AS medicine_name, mg.name AS generic_name
+    FROM stock_batches sb
+    JOIN medicines m ON sb.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+    WHERE sb.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+    ORDER BY sb.expiry_date ASC
+    LIMIT 5
+";
+$expiring_soon = $conn->query($expiring_soon_query);
 
 // Get recent stock additions
-$recent_additions = mysqli_query(
-    $conn,
-    "SELECT sb.*, m.name AS medicine_name
-     FROM stock_batches sb
-     JOIN medicines m ON sb.medicine_id = m.id
-     ORDER BY sb.received_date DESC
-     LIMIT 5"
-);
+$recent_additions_query = "
+    SELECT sb.*, m.name AS medicine_name, mg.name AS generic_name
+    FROM stock_batches sb
+    JOIN medicines m ON sb.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+    ORDER BY sb.received_date DESC
+    LIMIT 5
+";
+$recent_additions = $conn->query($recent_additions_query);
 
 // Get all medicines for filter
-$medicines = mysqli_query($conn, "SELECT id, name, generic_name FROM medicines ORDER BY name");
+$medicines_query = "
+    SELECT m.id, m.name, mg.name AS generic_name
+    FROM medicines m
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+    ORDER BY m.name
+";
+$medicines = $conn->query($medicines_query);
+
 ?>
 
 <!DOCTYPE html>

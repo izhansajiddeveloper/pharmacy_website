@@ -9,16 +9,19 @@ if ($_SESSION['role'] !== 'pharmacist') {
 
 $id = intval($_GET['id']);
 $stock = mysqli_fetch_assoc(
-    mysqli_query($conn, "SELECT sb.*, m.name AS medicine_name, m.generic_name, 
-                         c.name AS category_name, t.name AS type_name,
-                         s.name AS supplier_name
-                         FROM stock_batches sb
-                         JOIN medicines m ON sb.medicine_id = m.id
-                         LEFT JOIN medicine_categories c ON m.category_id = c.id
-                         LEFT JOIN medicine_types t ON m.type_id = t.id
-                         LEFT JOIN suppliers s ON sb.supplier_id = s.id
-                         WHERE sb.id=$id")
+    mysqli_query($conn, "SELECT sb.*, 
+                                 m.name AS medicine_name,
+                                 c.name AS category_name, 
+                                 t.name AS type_name,
+                                 s.name AS supplier_name
+                          FROM stock_batches sb
+                          JOIN medicines m ON sb.medicine_id = m.id
+                          LEFT JOIN medicine_categories c ON m.category_id = c.id
+                          LEFT JOIN medicine_types t ON m.type_id = t.id
+                          LEFT JOIN suppliers s ON sb.supplier_id = s.id
+                          WHERE sb.id=$id")
 );
+
 
 if (!$stock) {
     header("Location: stock.php");

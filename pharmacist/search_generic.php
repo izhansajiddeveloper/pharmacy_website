@@ -37,111 +37,114 @@ if (isset($_GET['q'])) {
     if ($search_term !== '') {
         // Modified query to get batch-wise information grouped by generic name
         $stmt = $conn->prepare("
-            SELECT 
-                m.id,
-                m.name,
-                m.generic_name,
-                m.description,
-                m.created_at,
-                
-                mc.name AS category_name,
-                mt.name AS type_name,
-                
-                -- Batch details (grouped by batch)
-                GROUP_CONCAT(
-                    DISTINCT CONCAT(
-                        'Batch:', 
-                        sb.id, 
-                        '|Qty:', 
-                        sb.quantity, 
-                        '|Exp:', 
-                        DATE_FORMAT(sb.expiry_date, '%M %Y'),
-                        '|Price:', 
-                        sb.selling_price,
-                        '|BatchNo:', 
-                        IFNULL(sb.batch_no, 'N/A'),
-                        '|Status:',
-                        CASE 
-                            WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 THEN 'Expired'
-                            WHEN DATEDIFF(sb.expiry_date, CURDATE()) <= 30 THEN 'Near Expiry'
-                            ELSE 'Valid'
-                        END,
-                        '|Brand:', 
-                        m.name
-                    ) SEPARATOR '||'
-                ) AS batch_details,
-                
-                -- Get total valid stock
-                COALESCE(SUM(
-                    CASE 
-                        WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
-                        THEN sb.quantity 
-                        ELSE 0 
-                    END
-                ), 0) AS total_valid_stock,
-                
-                -- Get total expired stock
-                COALESCE(SUM(
-                    CASE 
-                        WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 
-                        THEN sb.quantity 
-                        ELSE 0 
-                    END
-                ), 0) AS total_expired_stock,
-                
-                -- Count of batches
-                COUNT(DISTINCT sb.id) AS batch_count,
-                
-                -- Get valid batches count
-                COUNT(DISTINCT CASE 
-                    WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
-                    THEN sb.id 
-                END) AS valid_batch_count,
-                
-                -- Get expired batches count
-                COUNT(DISTINCT CASE 
-                    WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 
-                    THEN sb.id 
-                END) AS expired_batch_count,
-                
-                -- Earliest expiry among valid batches
-                MIN(
-                    CASE 
-                        WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
-                        THEN sb.expiry_date 
-                        ELSE NULL 
-                    END
-                ) AS earliest_valid_expiry,
-                
-                -- Lowest selling price among valid batches
-                MIN(
-                    CASE 
-                        WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
-                        THEN sb.selling_price 
-                        ELSE NULL 
-                    END
-                ) AS min_selling_price,
-                
-                -- Count of different brands for this generic
-                COUNT(DISTINCT m.id) AS brand_count
+    SELECT 
+        m.id,
+        m.name,
+        mg.name AS generic_name,  -- fetch generic name from joined table
+        m.description,
+        m.created_at,
+        
+        mc.name AS category_name,
+        mt.name AS type_name,
+        
+        -- Batch details (grouped by batch)
+        GROUP_CONCAT(
+            DISTINCT CONCAT(
+                'Batch:', 
+                sb.id, 
+                '|Qty:', 
+                sb.quantity, 
+                '|Exp:', 
+                DATE_FORMAT(sb.expiry_date, '%M %Y'),
+                '|Price:', 
+                sb.selling_price,
+                '|BatchNo:', 
+                IFNULL(sb.batch_no, 'N/A'),
+                '|Status:',
+                CASE 
+                    WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 THEN 'Expired'
+                    WHEN DATEDIFF(sb.expiry_date, CURDATE()) <= 30 THEN 'Near Expiry'
+                    ELSE 'Valid'
+                END,
+                '|Brand:', 
+                m.name
+            ) SEPARATOR '||'
+        ) AS batch_details,
+        
+        -- Get total valid stock
+        COALESCE(SUM(
+            CASE 
+                WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
+                THEN sb.quantity 
+                ELSE 0 
+            END
+        ), 0) AS total_valid_stock,
+        
+        -- Get total expired stock
+        COALESCE(SUM(
+            CASE 
+                WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 
+                THEN sb.quantity 
+                ELSE 0 
+            END
+        ), 0) AS total_expired_stock,
+        
+        -- Count of batches
+        COUNT(DISTINCT sb.id) AS batch_count,
+        
+        -- Get valid batches count
+        COUNT(DISTINCT CASE 
+            WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
+            THEN sb.id 
+        END) AS valid_batch_count,
+        
+        -- Get expired batches count
+        COUNT(DISTINCT CASE 
+            WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 
+            THEN sb.id 
+        END) AS expired_batch_count,
+        
+        -- Earliest expiry among valid batches
+        MIN(
+            CASE 
+                WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
+                THEN sb.expiry_date 
+                ELSE NULL 
+            END
+        ) AS earliest_valid_expiry,
+        
+        -- Lowest selling price among valid batches
+        MIN(
+            CASE 
+                WHEN sb.expiry_date >= CURDATE() AND sb.is_expired = 0 
+                THEN sb.selling_price 
+                ELSE NULL 
+            END
+        ) AS min_selling_price,
+        
+        -- Count of different brands for this generic
+        COUNT(DISTINCT m.id) AS brand_count
 
-            FROM medicines m
+    FROM medicines m
 
-            LEFT JOIN medicine_categories mc 
-                ON m.category_id = mc.id
+    LEFT JOIN medicine_generics mg
+        ON m.generic_id = mg.id  -- join to get generic name
 
-            LEFT JOIN medicine_types mt 
-                ON m.type_id = mt.id
+    LEFT JOIN medicine_categories mc 
+        ON m.category_id = mc.id
 
-            LEFT JOIN stock_batches sb 
-                ON m.id = sb.medicine_id
+    LEFT JOIN medicine_types mt 
+        ON m.type_id = mt.id
 
-            WHERE m.generic_name LIKE CONCAT('%', ?, '%')
-                AND (sb.id IS NULL OR sb.quantity > 0)
+    LEFT JOIN stock_batches sb 
+        ON m.id = sb.medicine_id
 
-            GROUP BY m.generic_name
-            ORDER BY m.generic_name ASC
-        ");
+    WHERE mg.name LIKE CONCAT('%', ?, '%')  -- search by generic name from joined table
+        AND (sb.id IS NULL OR sb.quantity > 0)
+
+    GROUP BY mg.name  -- group by generic name
+    ORDER BY mg.name ASC
+");
 
         $stmt->bind_param("s", $search_term);
         $stmt->execute();

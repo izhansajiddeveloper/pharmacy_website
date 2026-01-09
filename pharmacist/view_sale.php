@@ -25,13 +25,14 @@ if (!$sale) {
 }
 
 // Get sale items
-$items_query = "SELECT si.*, m.name AS medicine_name, m.generic_name, sb.batch_no
+$items_query = "SELECT si.*, m.name AS medicine_name, sb.batch_no
                 FROM sale_items si
                 LEFT JOIN medicines m ON si.medicine_id = m.id
                 LEFT JOIN stock_batches sb ON si.batch_id = sb.id
                 WHERE si.sale_id = $sale_id";
 
 $items_result = mysqli_query($conn, $items_query);
+
 
 // Store items in array for calculations
 $items_array = [];

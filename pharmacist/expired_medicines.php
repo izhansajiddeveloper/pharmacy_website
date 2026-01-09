@@ -141,10 +141,8 @@ $query = "
     SELECT 
         m.id AS medicine_id,
         m.name AS medicine_name,
-        m.generic_name,
+        mg.name AS generic_name,
         m.description,
-       
-        
         mc.name AS category_name,
         mt.name AS type_name,
         sb.id AS batch_id,
@@ -161,12 +159,12 @@ $query = "
         sb.is_disposed,
         sb.added_at,
         s.name AS supplier_name,
-        
         s.phone,
         s.email,
         DATEDIFF(CURDATE(), sb.expiry_date) AS days_expired
     FROM stock_batches sb
     JOIN medicines m ON sb.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
     LEFT JOIN medicine_categories mc ON m.category_id = mc.id
     LEFT JOIN medicine_types mt ON m.type_id = mt.id
     LEFT JOIN suppliers s ON sb.supplier_id = s.id
@@ -175,6 +173,7 @@ $query = "
       AND sb.is_disposed = 0
     ORDER BY sb.expiry_date ASC, m.name ASC
 ";
+
 
 $result = mysqli_query($conn, $query);
 $expired_medicines = [];

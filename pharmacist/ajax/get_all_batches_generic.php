@@ -25,13 +25,14 @@ $query = "
     SELECT 
         sb.*,
         m.name AS brand_name,
-        m.generic_name,
+        mg.name AS generic_name,
         s.name AS supplier_name,
         DATEDIFF(sb.expiry_date, CURDATE()) AS days_until_expiry
     FROM stock_batches sb
     INNER JOIN medicines m ON sb.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
     LEFT JOIN suppliers s ON sb.supplier_id = s.id
-    WHERE m.generic_name = ?
+    WHERE mg.name LIKE CONCAT('%', ?, '%')
     ORDER BY 
         CASE 
             WHEN sb.expiry_date < CURDATE() OR sb.is_expired = 1 THEN 3
@@ -59,27 +60,27 @@ $summary = [
 
 $brands_seen = [];
 
-if ($result->num_rows > 0) {
-    while ($row = $result->fetch_assoc()) {
-        $batches[] = $row;
+while ($row = $result->fetch_assoc()) {
+    $batches[] = $row;
 
-        // Update summary
-        $summary['total_batches']++;
-        $summary['total_quantity'] += $row['quantity'];
+    // Update summary
+    $summary['total_batches']++;
+    $summary['total_quantity'] += $row['quantity'] ?? 0;
 
-        // Track unique brands
-        if (!in_array($row['brand_name'], $brands_seen)) {
-            $brands_seen[] = $row['brand_name'];
-            $summary['brand_count']++;
-        }
+    // Track unique brands
+    if (!in_array($row['brand_name'], $brands_seen)) {
+        $brands_seen[] = $row['brand_name'];
+        $summary['brand_count']++;
+    }
 
-        if ($row['is_expired'] == 1 || $row['days_until_expiry'] < 0) {
-            $summary['expired_batches']++;
-        } elseif ($row['days_until_expiry'] <= 30) {
-            $summary['near_expiry']++;
-        } else {
-            $summary['valid_batches']++;
-        }
+    // Expiry logic
+    $days_until_expiry = isset($row['days_until_expiry']) ? (int)$row['days_until_expiry'] : null;
+    if ($row['is_expired'] == 1 || $days_until_expiry < 0) {
+        $summary['expired_batches']++;
+    } elseif ($days_until_expiry !== null && $days_until_expiry <= 30) {
+        $summary['near_expiry']++;
+    } else {
+        $summary['valid_batches']++;
     }
 }
 
