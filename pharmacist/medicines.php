@@ -76,126 +76,6 @@ while ($row = mysqli_fetch_assoc($stock_query)) {
     $stock_data[$row['id']] = $row['total_stock'];
 }
 
-/* ===============================
-   HANDLE EDIT FORM SUBMISSION (AJAX)
-================================ */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit_medicine') {
-    if ($_SESSION['role'] !== 'pharmacist') {
-        echo json_encode(['success' => false, 'message' => 'Permission denied']);
-        exit;
-    }
-
-    $id = intval($_POST['id'] ?? 0);
-    $name = mysqli_real_escape_string($conn, trim($_POST['name'] ?? ''));
-    $category_id = intval($_POST['category_id'] ?? 0);
-    $type_id = intval($_POST['type_id'] ?? 0);
-    $generic_id = intval($_POST['generic_id'] ?? 0);
-    $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
-
-    // Validate
-    if ($id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Invalid medicine ID']);
-        exit;
-    }
-
-    if (empty($name)) {
-        echo json_encode(['success' => false, 'message' => 'Medicine name is required']);
-        exit;
-    }
-
-    if ($category_id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Category is required']);
-        exit;
-    }
-
-    if ($type_id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Type is required']);
-        exit;
-    }
-
-    // Update medicine
-    $update_query = "UPDATE medicines SET 
-        name = '$name',
-        category_id = $category_id,
-        type_id = $type_id,
-        generic_id = " . ($generic_id > 0 ? $generic_id : "NULL") . ",
-        description = '$description',
-        updated_at = NOW()
-        WHERE id = $id";
-
-    if (mysqli_query($conn, $update_query)) {
-        echo json_encode(['success' => true, 'message' => 'Medicine updated successfully']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
-    }
-    exit;
-}
-
-/* ===============================
-   FETCH DATA FOR EDIT MODAL (AJAX)
-================================ */
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_medicine') {
-    if ($_SESSION['role'] !== 'pharmacist') {
-        echo json_encode(['success' => false, 'message' => 'Permission denied']);
-        exit;
-    }
-
-    $id = intval($_GET['id'] ?? 0);
-
-    if ($id <= 0) {
-        echo json_encode(['success' => false, 'message' => 'Invalid medicine ID']);
-        exit;
-    }
-
-    // Fetch medicine details
-    $medicine_query = mysqli_query(
-        $conn,
-        "SELECT m.*, c.name AS category_name, t.name AS type_name, g.name AS generic_name
-         FROM medicines m
-         LEFT JOIN medicine_categories c ON m.category_id = c.id
-         LEFT JOIN medicine_types t ON m.type_id = t.id
-         LEFT JOIN medicine_generics g ON m.generic_id = g.id
-         WHERE m.id = $id"
-    );
-
-    if ($medicine = mysqli_fetch_assoc($medicine_query)) {
-        // Fetch categories, types, generics for dropdowns
-        $categories = mysqli_query($conn, "SELECT * FROM medicine_categories ORDER BY name");
-        $types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
-        $generics = mysqli_query($conn, "SELECT * FROM medicine_generics ORDER BY name");
-
-        $categories_data = [];
-        while ($cat = mysqli_fetch_assoc($categories)) {
-            $categories_data[] = $cat;
-        }
-
-        $types_data = [];
-        while ($type = mysqli_fetch_assoc($types)) {
-            $types_data[] = $type;
-        }
-
-        $generics_data = [];
-        while ($generic = mysqli_fetch_assoc($generics)) {
-            $generics_data[] = $generic;
-        }
-
-        echo json_encode([
-            'success' => true,
-            'medicine' => $medicine,
-            'categories' => $categories_data,
-            'types' => $types_data,
-            'generics' => $generics_data
-        ]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Medicine not found']);
-    }
-    exit;
-}
-
-/* ===============================
-   CONTINUE WITH NORMAL PAGE LOAD
-================================ */
-
 // Apply stock filters after fetching all data
 $filtered_result = [];
 $display_count = 0;
@@ -541,50 +421,6 @@ if ($result && mysqli_num_rows($result) > 0) {
             background: #fee2e2;
             border-left: 4px solid #ef4444;
         }
-
-        /* Edit Modal Styles */
-        .form-input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            font-size: 0.875rem;
-            transition: all 0.2s;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .form-label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #374151;
-        }
-
-        .select-input {
-            width: 100%;
-            padding: 0.75rem 2.5rem 0.75rem 1rem;
-            border: 1px solid #d1d5db;
-            border-radius: 0.5rem;
-            font-size: 0.875rem;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-            background-position: right 0.5rem center;
-            background-repeat: no-repeat;
-            background-size: 1.5em 1.5em;
-            transition: all 0.2s;
-        }
-
-        .select-input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
     </style>
 </head>
 
@@ -599,22 +435,6 @@ if ($result && mysqli_num_rows($result) > 0) {
 
         <!-- Main Content -->
         <main class="flex-1 overflow-hidden p-4 lg:p-6">
-            <!-- Success Notification -->
-            <div id="successNotification" class="fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transform transition-all duration-300 translate-x-full">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-check-circle"></i>
-                    <span id="successMessage">Medicine updated successfully!</span>
-                </div>
-            </div>
-
-            <!-- Error Notification -->
-            <div id="errorNotification" class="fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transform transition-all duration-300 translate-x-full">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <span id="errorMessage">Error updating medicine!</span>
-                </div>
-            </div>
-
             <!-- Page Header -->
             <div class="glass-card p-6 mb-6">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -912,13 +732,13 @@ if ($result && mysqli_num_rows($result) > 0) {
                                                     <span>Stock</span>
                                                 </a>
 
-                                                <!-- Edit -->
+                                                <!-- Edit - Redirect to separate edit page -->
                                                 <?php if ($can_edit): ?>
-                                                    <button onclick="openEditModal(<?php echo $row['id']; ?>)"
-                                                        class="action-btn bg-yellow-50 text-yellow-600 hover:bg-yellow-100 edit-btn">
+                                                    <a href="edit_medicine.php?id=<?php echo $row['id']; ?>"
+                                                        class="action-btn bg-yellow-50 text-yellow-600 hover:bg-yellow-100">
                                                         <i class="fas fa-edit text-xs"></i>
                                                         <span>Edit</span>
-                                                    </button>
+                                                    </a>
                                                 <?php endif; ?>
 
                                                 <!-- Delete -->
@@ -1035,106 +855,91 @@ if ($result && mysqli_num_rows($result) > 0) {
         </main>
     </div>
 
-    <!-- Edit Medicine Modal -->
-    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 modal-overlay">
+    <!-- View Medicine Details Modal -->
+    <div id="viewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4 modal-overlay">
         <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden modal-content">
             <div class="p-6 border-b border-gray-200">
                 <div class="flex items-center justify-between">
                     <h3 class="text-xl font-bold text-gray-900">
-                        <i class="fas fa-edit text-blue-500 mr-2"></i>
-                        <span id="modalTitle">Edit Medicine</span>
+                        <i class="fas fa-pills text-blue-500 mr-2"></i>
+                        <span id="modalTitle">Medicine Details</span>
                     </h3>
-                    <button onclick="closeEditModal()"
+                    <button onclick="closeViewModal()"
                         class="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-gray-200 transition">
                         <i class="fas fa-times text-gray-600"></i>
                     </button>
                 </div>
             </div>
             <div class="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-                <form id="editMedicineForm" class="space-y-6">
-                    <input type="hidden" id="medicineId" name="id">
-                    <input type="hidden" name="action" value="edit_medicine">
-
-                    <!-- Medicine Name -->
-                    <div>
-                        <label for="editName" class="form-label">Medicine Name *</label>
-                        <input type="text"
-                            id="editName"
-                            name="name"
-                            class="form-input"
-                            required
-                            placeholder="Enter medicine name">
-                    </div>
-
-                    <!-- Category and Type -->
-                    <div class="grid md:grid-cols-2 gap-6">
-                        <div>
-                            <label for="editCategory" class="form-label">Category *</label>
-                            <select id="editCategory"
-                                name="category_id"
-                                class="select-input"
-                                required>
-                                <option value="">Select Category</option>
-                                <!-- Categories will be loaded dynamically -->
-                            </select>
-                        </div>
-
-                        <div>
-                            <label for="editType" class="form-label">Type *</label>
-                            <select id="editType"
-                                name="type_id"
-                                class="select-input"
-                                required>
-                                <option value="">Select Type</option>
-                                <!-- Types will be loaded dynamically -->
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Generic Name -->
-                    <div>
-                        <label for="editGeneric" class="form-label">Generic Name</label>
-                        <select id="editGeneric"
-                            name="generic_id"
-                            class="select-input">
-                            <option value="">Select Generic</option>
-                            <!-- Generics will be loaded dynamically -->
-                        </select>
-                    </div>
-
-                    <!-- Description -->
-                    <div>
-                        <label for="editDescription" class="form-label">Description</label>
-                        <textarea id="editDescription"
-                            name="description"
-                            rows="4"
-                            class="form-input"
-                            placeholder="Enter medicine description (usage, side effects, precautions, etc.)"></textarea>
-                    </div>
-
+                <div id="medicineDetails" class="space-y-6">
                     <!-- Loading State -->
-                    <div id="editLoading" class="text-center py-4 hidden">
-                        <i class="fas fa-spinner fa-spin text-blue-500 text-2xl"></i>
-                        <p class="text-gray-600 mt-2">Loading medicine details...</p>
+                    <div id="viewLoading" class="text-center py-8">
+                        <i class="fas fa-spinner fa-spin text-blue-500 text-3xl"></i>
+                        <p class="text-gray-600 mt-3">Loading medicine details...</p>
                     </div>
 
-                    <!-- Form Actions -->
-                    <div class="flex flex-col md:flex-row gap-4 pt-6 border-t border-gray-200">
-                        <button type="submit"
-                            id="saveBtn"
-                            class="gradient-primary text-white px-6 py-4 rounded-xl font-semibold hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 shadow-md flex-1">
-                            <i class="fas fa-save"></i>
-                            <span>Save Changes</span>
-                        </button>
+                    <!-- Content will be loaded here -->
+                    <div id="viewContent" class="hidden">
+                        <!-- Medicine Name -->
+                        <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
+                            <h2 class="text-xl font-bold text-gray-900" id="viewName"></h2>
+                            <div class="flex items-center gap-3 mt-2">
+                                <span class="text-sm text-gray-600" id="viewId"></span>
+                                <span class="text-sm text-blue-600 font-medium" id="viewGeneric"></span>
+                            </div>
+                        </div>
 
-                        <button type="button"
-                            onclick="closeEditModal()"
-                            class="px-6 py-4 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-medium flex items-center justify-center gap-2 flex-1">
-                            <i class="fas fa-times"></i>
-                            <span>Cancel</span>
-                        </button>
+                        <!-- Details Grid -->
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <!-- Category -->
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="text-sm font-medium text-gray-500 mb-1">Category</h4>
+                                <p class="text-lg font-semibold text-gray-900" id="viewCategory"></p>
+                            </div>
+
+                            <!-- Type -->
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <h4 class="text-sm font-medium text-gray-500 mb-1">Type</h4>
+                                <p class="text-lg font-semibold text-gray-900" id="viewType"></p>
+                            </div>
+                        </div>
+
+                        <!-- Stock Status -->
+                        <div class="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-xl">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Stock Status</h4>
+                            <div class="flex items-center justify-between">
+                                <span class="text-2xl font-bold text-gray-900" id="viewStock"></span>
+                                <span class="px-3 py-1 rounded-full text-sm font-medium" id="viewStockStatus"></span>
+                            </div>
+                            <div class="mt-3">
+                                <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div class="h-full bg-green-500 rounded-full" id="viewStockBar"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="bg-white border border-gray-200 p-4 rounded-lg">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Description</h4>
+                            <p class="text-gray-700 leading-relaxed" id="viewDescription"></p>
+                        </div>
+
+                        <!-- Additional Info -->
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <h4 class="text-sm font-medium text-gray-700 mb-3">Additional Information</h4>
+                            <div class="grid grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <span class="text-gray-500">Created:</span>
+                                    <span class="ml-2 text-gray-900" id="viewCreated"></span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500">Last Updated:</span>
+                                    <span class="ml-2 text-gray-900" id="viewUpdated"></span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -1168,195 +973,109 @@ if ($result && mysqli_num_rows($result) > 0) {
     <?php include "../includes/footer.php"; ?>
 
     <script>
-        // Edit Modal Functions
-        let currentMedicineId = null;
-
-        function openEditModal(medicineId) {
-            currentMedicineId = medicineId;
-            const modal = document.getElementById('editModal');
+        // View Modal Functions
+        async function showMedicineDetails(medicineId) {
+            const modal = document.getElementById('viewModal');
             modal.classList.remove('hidden');
 
             // Show loading state
-            document.getElementById('editLoading').classList.remove('hidden');
-            document.getElementById('editMedicineForm').classList.add('hidden');
+            document.getElementById('viewLoading').classList.remove('hidden');
+            document.getElementById('viewContent').classList.add('hidden');
 
-            // Reset form
-            document.getElementById('editMedicineForm').reset();
-
-            // Load medicine data
-            loadMedicineData(medicineId);
-        }
-
-        function closeEditModal() {
-            document.getElementById('editModal').classList.add('hidden');
-            currentMedicineId = null;
-        }
-
-        async function loadMedicineData(medicineId) {
             try {
-                const response = await fetch(`medicines.php?action=get_medicine&id=${medicineId}`);
-                const data = await response.json();
+                // Fetch medicine details
+                const response = await fetch(`ajax/get_medicine_details.php?id=${medicineId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const text = await response.text();
+                console.log('Raw response:', text);
+                
+                // Check if response is valid JSON
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error('JSON parse error:', e);
+                    // If not JSON, try to extract error from HTML
+                    const errorMatch = text.match(/<b>([^<]+)<\/b>/);
+                    const errorMessage = errorMatch ? errorMatch[1] : 'Invalid response from server';
+                    throw new Error(errorMessage);
+                }
 
                 if (data.success) {
-                    // Populate form
-                    document.getElementById('medicineId').value = data.medicine.id;
-                    document.getElementById('editName').value = data.medicine.name;
-                    document.getElementById('editDescription').value = data.medicine.description || '';
-
-                    // Populate categories dropdown
-                    const categorySelect = document.getElementById('editCategory');
-                    categorySelect.innerHTML = '<option value="">Select Category</option>';
-                    data.categories.forEach(category => {
-                        const option = document.createElement('option');
-                        option.value = category.id;
-                        option.textContent = category.name;
-                        option.selected = (category.id == data.medicine.category_id);
-                        categorySelect.appendChild(option);
-                    });
-
-                    // Populate types dropdown
-                    const typeSelect = document.getElementById('editType');
-                    typeSelect.innerHTML = '<option value="">Select Type</option>';
-                    data.types.forEach(type => {
-                        const option = document.createElement('option');
-                        option.value = type.id;
-                        option.textContent = type.name;
-                        option.selected = (type.id == data.medicine.type_id);
-                        typeSelect.appendChild(option);
-                    });
-
-                    // Populate generics dropdown
-                    const genericSelect = document.getElementById('editGeneric');
-                    genericSelect.innerHTML = '<option value="">Select Generic</option>';
-                    data.generics.forEach(generic => {
-                        const option = document.createElement('option');
-                        option.value = generic.id;
-                        option.textContent = generic.name;
-                        option.selected = (generic.id == data.medicine.generic_id);
-                        genericSelect.appendChild(option);
-                    });
-
-                    // Hide loading, show form
-                    document.getElementById('editLoading').classList.add('hidden');
-                    document.getElementById('editMedicineForm').classList.remove('hidden');
-
                     // Update modal title
-                    document.getElementById('modalTitle').textContent = `Edit ${data.medicine.name}`;
+                    document.getElementById('modalTitle').textContent = data.medicine.name;
+                    
+                    // Update medicine details
+                    document.getElementById('viewName').textContent = data.medicine.name;
+                    document.getElementById('viewId').textContent = `MED-${String(data.medicine.id).padStart(6, '0')}`;
+                    document.getElementById('viewGeneric').textContent = data.medicine.generic_name || 'No generic specified';
+                    document.getElementById('viewCategory').textContent = data.medicine.category_name || 'Not specified';
+                    document.getElementById('viewType').textContent = data.medicine.type_name || 'Not specified';
+                    document.getElementById('viewDescription').textContent = data.medicine.description || 'No description available';
+                    
+                    // Format dates
+                    const createdDate = new Date(data.medicine.created_at);
+                    const updatedDate = new Date(data.medicine.updated_at || data.medicine.created_at);
+                    document.getElementById('viewCreated').textContent = createdDate.toLocaleDateString() + ' ' + createdDate.toLocaleTimeString();
+                    document.getElementById('viewUpdated').textContent = updatedDate.toLocaleDateString() + ' ' + updatedDate.toLocaleTimeString();
+                    
+                    // Get stock data
+                    const stockResponse = await fetch(`ajax/get_medicine_stock.php?id=${medicineId}`);
+                    if (stockResponse.ok) {
+                        const stockData = await stockResponse.json();
+                        if (stockData.success) {
+                            const totalStock = stockData.total_stock || 0;
+                            document.getElementById('viewStock').textContent = `${totalStock} units`;
+                            
+                            // Determine stock status
+                            let statusText, statusColor, percent;
+                            if (totalStock == 0) {
+                                statusText = 'No Stock';
+                                statusColor = 'bg-red-100 text-red-800';
+                                percent = 0;
+                            } else if (totalStock < 40) {
+                                statusText = 'Low Stock';
+                                statusColor = 'bg-yellow-100 text-yellow-800';
+                                percent = (totalStock / 40) * 100;
+                            } else if (totalStock < 100) {
+                                statusText = 'Medium Stock';
+                                statusColor = 'bg-green-100 text-green-800';
+                                percent = (totalStock / 100) * 100;
+                            } else {
+                                statusText = 'Good Stock';
+                                statusColor = 'bg-emerald-100 text-emerald-800';
+                                percent = 100;
+                            }
+                            
+                            document.getElementById('viewStockStatus').textContent = statusText;
+                            document.getElementById('viewStockStatus').className = `px-3 py-1 rounded-full text-sm font-medium ${statusColor}`;
+                            document.getElementById('viewStockBar').style.width = `${Math.min(percent, 100)}%`;
+                        }
+                    }
+                    
+                    // Hide loading, show content
+                    document.getElementById('viewLoading').classList.add('hidden');
+                    document.getElementById('viewContent').classList.remove('hidden');
+                    
                 } else {
-                    showNotification(data.message || 'Failed to load medicine data', 'error');
-                    closeEditModal();
+                    alert(data.message || 'Failed to load medicine details');
+                    closeViewModal();
                 }
             } catch (error) {
-                console.error('Error:', error);
-                showNotification('Error loading medicine data', 'error');
-                closeEditModal();
+                console.error('Error loading medicine details:', error);
+                alert('Error: ' + error.message);
+                closeViewModal();
             }
         }
 
-        // Handle form submission
-        document.getElementById('editMedicineForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const formData = new FormData(this);
-            const saveBtn = document.getElementById('saveBtn');
-            const originalText = saveBtn.innerHTML;
-
-            // Show loading state
-            saveBtn.innerHTML = `
-                <i class="fas fa-spinner fa-spin mr-2"></i>
-                <span>Saving...</span>
-            `;
-            saveBtn.disabled = true;
-
-            try {
-                const response = await fetch('medicines.php', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    // Show success notification
-                    showNotification(data.message || 'Medicine updated successfully!', 'success');
-
-                    // Update the table row in real-time
-                    updateTableRow(formData);
-
-                    // Close modal after a short delay
-                    setTimeout(() => {
-                        closeEditModal();
-                    }, 1500);
-                } else {
-                    showNotification(data.message || 'Failed to update medicine', 'error');
-                    saveBtn.innerHTML = originalText;
-                    saveBtn.disabled = false;
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showNotification('Error updating medicine', 'error');
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
-            }
-        });
-
-        // Update table row after successful edit
-        function updateTableRow(formData) {
-            const medicineId = formData.get('id');
-            const row = document.querySelector(`tr[data-id="${medicineId}"]`);
-
-            if (row) {
-                // Update medicine name
-                const nameElement = row.querySelector('.medicine-name');
-                if (nameElement) {
-                    nameElement.textContent = formData.get('name');
-                }
-
-                // Update description in data attribute if needed
-                row.dataset.description = formData.get('description') || '';
-
-                // Note: Category, type, and generic names would need to be fetched from server
-                // or you could reload the page: window.location.reload();
-
-                // For now, we'll reload the page to show all updated data
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1000);
-            }
+        function closeViewModal() {
+            document.getElementById('viewModal').classList.add('hidden');
         }
 
-        // Show notification
-        function showNotification(message, type = 'success') {
-            if (type === 'success') {
-                const notification = document.getElementById('successNotification');
-                document.getElementById('successMessage').textContent = message;
-                notification.classList.remove('hidden', 'translate-x-full');
-                notification.classList.add('translate-x-0');
-
-                setTimeout(() => {
-                    notification.classList.remove('translate-x-0');
-                    notification.classList.add('translate-x-full');
-                    setTimeout(() => {
-                        notification.classList.add('hidden');
-                    }, 300);
-                }, 3000);
-            } else {
-                const notification = document.getElementById('errorNotification');
-                document.getElementById('errorMessage').textContent = message;
-                notification.classList.remove('hidden', 'translate-x-full');
-                notification.classList.add('translate-x-0');
-
-                setTimeout(() => {
-                    notification.classList.remove('translate-x-0');
-                    notification.classList.add('translate-x-full');
-                    setTimeout(() => {
-                        notification.classList.add('hidden');
-                    }, 300);
-                }, 3000);
-            }
-        }
-
-        // Rest of your existing functions...
         // Confirm delete
         function confirmDelete(id, name) {
             document.getElementById('deleteModal').classList.remove('hidden');
@@ -1374,14 +1093,14 @@ if ($result && mysqli_num_rows($result) > 0) {
         // Close modals on ESC key
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
-                closeEditModal();
+                closeViewModal();
                 closeDeleteModal();
             }
         });
 
         // Close modal when clicking outside
-        document.getElementById('editModal').addEventListener('click', function(e) {
-            if (e.target === this) closeEditModal();
+        document.getElementById('viewModal').addEventListener('click', function(e) {
+            if (e.target === this) closeViewModal();
         });
 
         document.getElementById('deleteModal').addEventListener('click', function(e) {
@@ -1408,6 +1127,47 @@ if ($result && mysqli_num_rows($result) > 0) {
                 });
             });
         });
+
+        // Export to CSV function
+        function exportToCSV() {
+            // Get all medicine data from table
+            const rows = [];
+            const headers = ['ID', 'Name', 'Generic Name', 'Category', 'Type', 'Description', 'Stock'];
+            
+            // Get visible rows
+            document.querySelectorAll('#medicinesTableBody tr').forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 4) {
+                    const rowData = [
+                        row.querySelector('.medicine-id')?.textContent.replace('MED-', '') || '',
+                        row.querySelector('.medicine-name')?.textContent || '',
+                        row.querySelector('.generic-name')?.textContent || '',
+                        row.querySelector('.category-name')?.textContent || '',
+                        row.querySelector('.type-name')?.textContent || '',
+                        row.getAttribute('data-description') || '',
+                        row.querySelector('.font-bold')?.textContent.replace(' units', '') || '0'
+                    ];
+                    rows.push(rowData);
+                }
+            });
+            
+            // Create CSV content
+            let csvContent = headers.join(',') + '\n';
+            rows.forEach(row => {
+                csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
+            });
+            
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `medicines_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
     </script>
 </body>
 

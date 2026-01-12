@@ -449,548 +449,592 @@ $active_medicines_count = mysqli_fetch_assoc($active_medicines)['active_medicine
     <?php include "../includes/navbar.php"; ?>
 
     <div class="flex">
-        <!-- Sidebar -->
-        <aside id="sidebar" class="bg-gradient-to-b from-gray-900 to-gray-800 text-white fixed lg:sticky top-12 h-full lg:h-[calc(100vh-4rem)] w-64 lg:w-72 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 z-40 overflow-y-auto custom-scrollbar shadow-2xl">
-            <div class="p-6">
-                <!-- User Info -->
-                <div class="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-700/50">
-                    <div class="w-12 h-12 rounded-full gradient-yellow flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                        <?php echo strtoupper(substr($user_name, 0, 1)); ?>
+    <!-- Sidebar -->
+    <aside id="sidebar" class="bg-gradient-to-b from-gray-900 to-gray-800 text-white fixed lg:sticky top-12 h-full lg:h-[calc(100vh-4rem)] w-64 lg:w-72 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 z-40 overflow-y-auto custom-scrollbar shadow-2xl">
+        <div class="p-6">
+            <!-- User Info -->
+            <div class="flex items-center space-x-3 mb-8 pb-6 border-b border-gray-700/50">
+                <div class="w-12 h-12 rounded-full gradient-yellow flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                    <?php echo strtoupper(substr($user_name, 0, 1)); ?>
+                </div>
+                <div>
+                    <h3 class="font-bold text-white"><?php echo htmlspecialchars($user_name); ?></h3>
+                    <p class="text-xs text-gray-300">Pharmacist</p>
+                    <p class="text-xs text-green-400 mt-1 flex items-center">
+                        <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                        Online
+                    </p>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="space-y-1">
+                <!-- Dashboard -->
+                <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg gradient-yellow text-white shadow-lg">
+                    <div class="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                        <i class="fas fa-tachometer-alt text-white text-lg"></i>
                     </div>
-                    <div>
-                        <h3 class="font-bold text-white"><?php echo htmlspecialchars($user_name); ?></h3>
-                        <p class="text-xs text-gray-300">Pharmacist</p>
-                        <p class="text-xs text-green-400 mt-1 flex items-center">
-                            <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-                            Online
-                        </p>
+                    <span class="font-medium text-white">Dashboard</span>
+                    <span class="ml-auto">
+                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
+                    </span>
+                </a>
+
+                <!-- Medicines Dropdown -->
+                <div class="space-y-1">
+                    <button type="button" class="medicines-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
+                                <i class="fas fa-pills text-gray-300 text-lg"></i>
+                            </div>
+                            <span class="font-medium text-gray-200">Medicines</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                    </button>
+                    
+                    <!-- Medicines Submenu -->
+                    <div class="medicines-submenu pl-4 ml-4 border-l border-gray-700/50 hidden">
+                        <!-- All Medicines -->
+                        <a href="medicines.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">All Medicines</span>
+                            <span class="ml-auto bg-gray-600/50 text-gray-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo $medicines; ?></span>
+                        </a>
+                        
+                        <!-- Search Brand -->
+                        <a href="search_brand.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Search Brand</span>
+                        </a>
+                        
+                        <!-- Search Generic -->
+                        <a href="search_generic.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Search Generic</span>
+                        </a>
+                        
+                        <!-- Return to Company -->
+                        <a href="return_to_company.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Return to Company</span>
+                        </a>
+                        
+                        <!-- Expired Medicines -->
+                        <a href="expired_medicines.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Expired Medicines</span>
+                        </a>
                     </div>
                 </div>
 
-                <!-- Navigation -->
-                <nav class="space-y-2">
-                    <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg gradient-yellow text-white shadow-lg">
-                        <i class="fas fa-tachometer-alt text-lg"></i>
-                        <span class="font-medium">Dashboard</span>
-                        <span class="ml-auto">
-                            <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                        </span>
-                    </a>
-
-                    <a href="medicines.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-pills text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Medicines</span>
-                        <span class="ml-auto bg-gray-600/50 text-gray-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo $medicines; ?></span>
-                    </a>
-
-                    <a href="search_brand.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-search text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Search Brand</span>
-                    </a>
-
-                    <a href="search_generic.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-search-plus text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Search Generic</span>
-                    </a>
-
-                    <a href="stock.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-boxes text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Stock</span>
-                        <span class="ml-auto bg-gray-600/50 text-gray-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo number_format($stock); ?></span>
-                    </a>
-
-                    <a href="add_stock.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-plus-circle text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Add Stock</span>
-                    </a>
-
-                    <a href="sales.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-shopping-cart text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Sales</span>
-                        <span class="ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo $sales; ?></span>
-                    </a>
-
-                    <a href="create_sale.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Create Sale</span>
-                    </a>
-                    <a href="expired_medicines.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Expired Medicines</span>
-                    </a>
-                    <a href="return_to_company.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Return To Company</span>
-                    </a>
-                    <a href="payments.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Payments</span>
-                    </a>
-                    <a href="expenses.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Expenses</span>
-                    </a>
-                    <a href="profit.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
-                        <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                            <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                        </div>
-                        <span class="font-medium text-gray-200">Profit</span>
-                    </a>
-                </nav>
-
-                <!-- Divider -->
-                <div class="my-6 border-t border-gray-700/50"></div>
-
-                <!-- Quick Stats -->
-                <div class="space-y-4">
-                    <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Today's Stats</h4>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                <span class="text-sm text-gray-400">Revenue</span>
+                <!-- Stock Dropdown -->
+                <div class="space-y-1">
+                    <button type="button" class="stock-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
+                                <i class="fas fa-boxes text-gray-300 text-lg"></i>
                             </div>
-                            <span class="font-bold text-yellow-400">Rs <?php echo number_format($today_revenue); ?></span>
+                            <span class="font-medium text-gray-200">Stock</span>
                         </div>
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 rounded-full bg-gray-500"></div>
-                                <span class="text-sm text-gray-400">Medicines</span>
-                            </div>
-                            <span class="font-bold text-gray-300"><?php echo $active_medicines_count; ?></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                                <span class="text-sm text-gray-400">Alerts</span>
-                            </div>
-                            <span class="font-bold text-red-400"><?php echo count($low_stock) + count($expiring_soon); ?></span>
-                        </div>
+                        <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                    </button>
+                    
+                    <!-- Stock Submenu -->
+                    <div class="stock-submenu pl-4 ml-4 border-l border-gray-700/50 hidden">
+                        <!-- View Stock -->
+                        <a href="stock.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">View Stock</span>
+                            <span class="ml-auto bg-gray-600/50 text-gray-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo number_format($stock); ?></span>
+                        </a>
+                        
+                        <!-- Add Stock -->
+                        <a href="add_stock.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Add Stock</span>
+                        </a>
                     </div>
                 </div>
 
-                <!-- Logout -->
-                <div class="mt-8 pt-6 border-t border-gray-700/50">
-                    <a href="../auth/logout.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-200 group">
-                        <i class="fas fa-sign-out-alt text-red-400 group-hover:text-red-300"></i>
-                        <span class="text-red-300 group-hover:text-red-200">Logout</span>
+                <!-- Sale Dropdown -->
+                <div class="space-y-1">
+                    <button type="button" class="sale-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
+                                <i class="fas fa-shopping-cart text-gray-300 text-lg"></i>
+                            </div>
+                            <span class="font-medium text-gray-200">Sale</span>
+                        </div>
+                        <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                    </button>
+                    
+                    <!-- Sale Submenu -->
+                    <div class="sale-submenu pl-4 ml-4 border-l border-gray-700/50 hidden">
+                        <!-- Create Sale -->
+                        <a href="create_sale.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Create Sale</span>
+                        </a>
+                        
+                        <!-- View Sales -->
+                        <a href="sales.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">View Sales</span>
+                            <span class="ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full font-medium"><?php echo $sales; ?></span>
+                        </a>
+                        
+                        <!-- Payments -->
+                        <a href="payments.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Payments</span>
+                        </a>
+                        
+                        <!-- Expenses -->
+                        <a href="expenses.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Expenses</span>
+                        </a>
+                        
+                        <!-- Profit Analysis -->
+                        <a href="profit.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Profit Analysis</span>
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Divider -->
+            <div class="my-6 border-t border-gray-700/50"></div>
+
+            <!-- Quick Stats -->
+            <div class="space-y-4">
+                <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Today's Stats</h4>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <span class="text-sm text-gray-400">Revenue</span>
+                        </div>
+                        <span class="font-bold text-yellow-400">Rs <?php echo number_format($today_revenue); ?></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-gray-500"></div>
+                            <span class="text-sm text-gray-400">Medicines</span>
+                        </div>
+                        <span class="font-bold text-gray-300"><?php echo $active_medicines_count; ?></span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <span class="text-sm text-gray-400">Alerts</span>
+                        </div>
+                        <span class="font-bold text-red-400"><?php echo count($low_stock) + count($expiring_soon); ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logout -->
+            <div class="mt-8 pt-6 border-t border-gray-700/50">
+                <a href="../auth/logout.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg bg-gradient-to-r from-red-500/10 to-red-600/10 hover:from-red-500/20 hover:to-red-600/20 transition-all duration-200 group">
+                    <i class="fas fa-sign-out-alt text-red-400 group-hover:text-red-300"></i>
+                    <span class="text-red-300 group-hover:text-red-200">Logout</span>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Overlay for mobile -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden"></div>
+
+    <!-- Main Content -->
+    <main class="flex-1 overflow-hidden">
+        <!-- Dashboard Header -->
+        <div class="glass-card mx-6 mt-6 rounded-2xl p-6 animate-fade-in-up">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between">
+                <div>
+                    <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
+                        <span class="bg-gradient-to-r from-yellow-500 to-yellow-600 bg-clip-text text-transparent">Pharmacist Dashboard</span> Overview
+                    </h1>
+                    <p class="text-gray-600 flex items-center space-x-2">
+                        <i class="fas fa-calendar-alt text-yellow-500"></i>
+                        <span><?php echo date('l, F j, Y'); ?></span>
+                        <span class="text-gray-400 mx-2">•</span>
+                        <i class="fas fa-clock text-gray-500"></i>
+                        <span id="current-time">Loading...</span>
+                        <span class="text-gray-400 mx-2">•</span>
+                        <i class="fas fa-user-md text-yellow-500"></i>
+                        <span><?php echo htmlspecialchars($user_name); ?></span>
+                    </p>
+                </div>
+                <div class="mt-4 lg:mt-0 flex items-center space-x-4">
+                    <button onclick="refreshDashboard()" class="gradient-yellow text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 flex items-center space-x-2 pulse-glow">
+                        <i class="fas fa-redo"></i>
+                        <span>Refresh Data</span>
+                    </button>
+                    <a href="create_sale.php" class="gradient-mixed text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 flex items-center space-x-2">
+                        <i class="fas fa-cash-register"></i>
+                        <span>New Sale</span>
                     </a>
                 </div>
             </div>
-        </aside>
+        </div>
 
-        <!-- Overlay for mobile -->
-        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden"></div>
-
-        <!-- Main Content -->
-        <main class="flex-1 overflow-hidden">
-            <!-- Dashboard Header -->
-            <div class="glass-card mx-6 mt-6 rounded-2xl p-6 animate-fade-in-up">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between">
-                    <div>
-                        <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
-                            <span class="bg-gradient-to-r from-yellow-500 to-yellow-600 bg-clip-text text-transparent">Pharmacist Dashboard</span> Overview
-                        </h1>
-                        <p class="text-gray-600 flex items-center space-x-2">
-                            <i class="fas fa-calendar-alt text-yellow-500"></i>
-                            <span><?php echo date('l, F j, Y'); ?></span>
-                            <span class="text-gray-400 mx-2">•</span>
-                            <i class="fas fa-clock text-gray-500"></i>
-                            <span id="current-time">Loading...</span>
-                            <span class="text-gray-400 mx-2">•</span>
-                            <i class="fas fa-user-md text-yellow-500"></i>
-                            <span><?php echo htmlspecialchars($user_name); ?></span>
-                        </p>
+        <!-- Dashboard Grid -->
+        <div class="dashboard-container">
+            <!-- Revenue Stats -->
+            <div class="grid-col-3">
+                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.1s">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 rounded-xl gradient-yellow flex items-center justify-center shadow-lg">
+                            <i class="fas fa-rupee-sign text-white text-xl"></i>
+                        </div>
+                        <span class="text-xs font-bold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Today</span>
                     </div>
-                    <div class="mt-4 lg:mt-0 flex items-center space-x-4">
-                        <button onclick="refreshDashboard()" class="gradient-yellow text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 flex items-center space-x-2 pulse-glow">
-                            <i class="fas fa-redo"></i>
-                            <span>Refresh Data</span>
-                        </button>
-                        <a href="create_sale.php" class="gradient-mixed text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 flex items-center space-x-2">
-                            <i class="fas fa-cash-register"></i>
-                            <span>New Sale</span>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($today_revenue); ?></h3>
+                    <p class="text-gray-600 mb-3">Daily Revenue</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="gradient-yellow h-2 rounded-full" style="width: <?php echo min(100, ($today_revenue / 50000) * 100); ?>%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-col-3">
+                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.2s">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 rounded-xl gradient-gray flex items-center justify-center shadow-lg">
+                            <i class="fas fa-chart-line text-white text-xl"></i>
+                        </div>
+                        <span class="text-xs font-bold text-gray-600 bg-gray-50 px-3 py-1 rounded-full">Weekly</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($week_revenue); ?></h3>
+                    <p class="text-gray-600 mb-3">Weekly Revenue</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="gradient-gray h-2 rounded-full" style="width: <?php echo min(100, ($week_revenue / 250000) * 100); ?>%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-col-3">
+                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.3s">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 rounded-xl gradient-mixed flex items-center justify-center shadow-lg">
+                            <i class="fas fa-calendar-alt text-white text-xl"></i>
+                        </div>
+                        <span class="text-xs font-bold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Monthly</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($month_revenue); ?></h3>
+                    <p class="text-gray-600 mb-3">Monthly Revenue</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div class="gradient-mixed h-2 rounded-full" style="width: <?php echo min(100, ($month_revenue / 1000000) * 100); ?>%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid-col-3">
+                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.4s">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 flex items-center justify-center shadow-lg">
+                            <i class="fas fa-shopping-cart text-white text-xl"></i>
+                        </div>
+                        <span class="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">Total</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($sales); ?></h3>
+                    <p class="text-gray-600 mb-3">Total Sales</p>
+                    <div class="flex items-center text-sm">
+                        <span class="text-yellow-500 mr-2 flex items-center">
+                            <i class="fas fa-chart-line mr-1"></i>
+                            <?php echo $sales > 0 ? round($sales / 30) : 0; ?>/day avg
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Chart Area -->
+            <div class="grid-col-8">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.5s">
+                    <div class="flex flex-col lg:flex-row lg:items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">Sales Performance</h3>
+                            <p class="text-gray-600">Your revenue and sales count over last 6 months</p>
+                        </div>
+                        <div class="flex space-x-2 mt-4 lg:mt-0">
+                            <button class="chart-filter active px-4 py-2 bg-yellow-50 text-yellow-600 rounded-lg font-medium" data-filter="revenue">Revenue</button>
+                            <button class="chart-filter px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium" data-filter="sales">Sales Count</button>
+                            <button class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium hover:bg-gray-200">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="combinedChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Overview -->
+            <div class="grid-col-4">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.6s">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Stock Overview</h3>
+                        <span class="text-sm text-yellow-600 font-medium bg-yellow-50 px-3 py-1 rounded-full">Live</span>
+                    </div>
+                    <div class="h-64 flex flex-col justify-center items-center">
+                        <div class="relative w-40 h-40 mb-6">
+                            <canvas id="stockChart"></canvas>
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <div class="text-3xl font-bold text-gray-800"><?php echo $active_medicines_count; ?></div>
+                                    <div class="text-sm text-gray-600">Active</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 w-full">
+                            <div class="text-center p-3 bg-green-50 rounded-lg">
+                                <div class="text-lg font-bold text-green-600"><?php echo $medicines; ?></div>
+                                <div class="text-xs text-gray-600">Total Medicines</div>
+                            </div>
+                            <div class="text-center p-3 bg-yellow-50 rounded-lg">
+                                <div class="text-lg font-bold text-yellow-600"><?php echo number_format($stock); ?></div>
+                                <div class="text-xs text-gray-600">Total Stock</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Daily Sales Line Chart -->
+            <div class="grid-col-6">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.8s">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">Daily Sales Trend</h3>
+                            <p class="text-gray-600">Your performance in last 7 days</p>
+                        </div>
+                        <span class="text-sm text-teal-600 bg-teal-50 px-3 py-1 rounded-full">
+                            Weekly View
+                        </span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Selling Medicines -->
+            <div class="grid-col-6">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.9s">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Top Selling Medicines</h3>
+                        <span class="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full">Your Sales</span>
+                    </div>
+                    <div class="space-y-4">
+                        <?php if (count($top_medicines) > 0): ?>
+                            <?php foreach ($top_medicines as $index => $medicine): ?>
+                                <div class="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-yellow-100 transition group">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 rounded-lg gradient-yellow flex items-center justify-center text-white font-bold shadow">
+                                            <?php echo $index + 1; ?>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600"><?php echo htmlspecialchars($medicine['medicine_name']); ?></h4>
+                                            <p class="text-xs text-gray-500">Sold: <?php echo $medicine['total_sold']; ?> units</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-bold text-gray-800">Rs <?php echo number_format($medicine['revenue']); ?></div>
+                                        <div class="text-xs text-gray-500">Revenue</div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="text-center py-8">
+                                <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <i class="fas fa-chart-bar text-gray-400"></i>
+                                </div>
+                                <p class="text-gray-500">No sales data available</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Alerts -->
+            <div class="grid-col-4">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1.1s">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Inventory Alerts</h3>
+                        <div class="flex space-x-2">
+                            <span class="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-medium shadow">
+                                <?php echo count($low_stock); ?> Low
+                            </span>
+                            <span class="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs font-medium shadow">
+                                <?php echo count($expiring_soon); ?> Expiring
+                            </span>
+                        </div>
+                    </div>
+                    <div class="space-y-4 max-h-80 overflow-y-auto custom-scrollbar">
+                        <!-- Low Stock Items -->
+                        <?php if (count($low_stock) > 0): ?>
+                            <?php foreach ($low_stock as $item): ?>
+                                <div class="p-3 bg-gradient-to-r from-red-50 to-white rounded-lg border border-red-100">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
+                                                <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
+                                            </div>
+                                            <h4 class="font-semibold text-gray-800 text-sm"><?php echo htmlspecialchars($item['medicine_name']); ?></h4>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-lg font-bold text-red-600"><?php echo $item['quantity']; ?></div>
+                                            <div class="text-xs text-gray-500">units left</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between text-xs text-gray-600">
+                                        <span>Expires: <?php echo date('M j', strtotime($item['expiry_date'])); ?></span>
+                                        <span class="<?php echo $item['days_until_expiry'] < 30 ? 'text-red-600 font-medium' : 'text-gray-500'; ?>">
+                                            <?php echo $item['days_until_expiry']; ?> days
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+
+                        <!-- Expiring Soon Items -->
+                        <?php if (count($expiring_soon) > 0): ?>
+                            <?php foreach ($expiring_soon as $item): ?>
+                                <div class="p-3 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
+                                                <i class="fas fa-clock text-yellow-600 text-sm"></i>
+                                            </div>
+                                            <h4 class="font-semibold text-gray-800 text-sm"><?php echo htmlspecialchars($item['medicine_name']); ?></h4>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-lg font-bold text-yellow-600"><?php echo $item['quantity']; ?></div>
+                                            <div class="text-xs text-gray-500">in stock</div>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-between text-xs text-gray-600">
+                                        <span>Expires: <?php echo date('M j', strtotime($item['expiry_date'])); ?></span>
+                                        <span class="text-red-600 font-medium">
+                                            <?php echo $item['days_until_expiry']; ?> days left
+                                        </span>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+
+                        <?php if (count($low_stock) == 0 && count($expiring_soon) == 0): ?>
+                            <div class="text-center py-8">
+                                <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 shadow">
+                                    <i class="fas fa-check text-green-600"></i>
+                                </div>
+                                <p class="text-gray-500">No inventory alerts</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="grid-col-4">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1s">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Quick Actions</h3>
+                        <span class="text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Daily Tasks</span>
+                    </div>
+                    <div class="space-y-4">
+                        <a href="create_sale.php" class="p-4 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100 hover:border-yellow-300 transition group flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-lg gradient-yellow flex items-center justify-center">
+                                <i class="fas fa-cash-register text-white text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600">Create New Sale</h4>
+                                <p class="text-xs text-gray-500">Process customer purchase</p>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400 group-hover:text-yellow-600"></i>
+                        </a>
+
+                        <a href="add_stock.php" class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-gray-300 transition group flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-lg gradient-gray flex items-center justify-center">
+                                <i class="fas fa-plus-circle text-white text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-800 text-sm group-hover:text-gray-600">Add Stock</h4>
+                                <p class="text-xs text-gray-500">Add new medicine batch</p>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400 group-hover:text-gray-600"></i>
+                        </a>
+
+                        <a href="medicines.php" class="p-4 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100 hover:border-yellow-300 transition group flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-lg gradient-yellow flex items-center justify-center">
+                                <i class="fas fa-pills text-white text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600">Browse Medicines</h4>
+                                <p class="text-xs text-gray-500">View medicine catalog</p>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400 group-hover:text-yellow-600"></i>
+                        </a>
+
+                        <a href="stock.php" class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-gray-300 transition group flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-lg gradient-gray flex items-center justify-center">
+                                <i class="fas fa-boxes text-white text-xl"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h4 class="font-semibold text-gray-800 text-sm group-hover:text-gray-600">Check Stock</h4>
+                                <p class="text-xs text-gray-500">Review inventory levels</p>
+                            </div>
+                            <i class="fas fa-chevron-right text-gray-400 group-hover:text-gray-600"></i>
                         </a>
                     </div>
                 </div>
             </div>
 
-            <!-- Dashboard Grid -->
-            <div class="dashboard-container">
-                <!-- Revenue Stats -->
-                <div class="grid-col-3">
-                    <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.1s">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="w-12 h-12 rounded-xl gradient-yellow flex items-center justify-center shadow-lg">
-                                <i class="fas fa-rupee-sign text-white text-xl"></i>
-                            </div>
-                            <span class="text-xs font-bold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Today</span>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($today_revenue); ?></h3>
-                        <p class="text-gray-600 mb-3">Daily Revenue</p>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="gradient-yellow h-2 rounded-full" style="width: <?php echo min(100, ($today_revenue / 50000) * 100); ?>%"></div>
-                        </div>
+            <!-- Recent Sales Activity -->
+            <div class="grid-col-4">
+                <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1.2s">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-bold text-gray-800">Recent Sales</h3>
+                        <a href="sales.php" class="text-sm text-yellow-600 hover:text-yellow-800 font-medium flex items-center">
+                            View All <i class="fas fa-arrow-right ml-2"></i>
+                        </a>
                     </div>
-                </div>
-
-                <div class="grid-col-3">
-                    <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.2s">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="w-12 h-12 rounded-xl gradient-gray flex items-center justify-center shadow-lg">
-                                <i class="fas fa-chart-line text-white text-xl"></i>
-                            </div>
-                            <span class="text-xs font-bold text-gray-600 bg-gray-50 px-3 py-1 rounded-full">Weekly</span>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($week_revenue); ?></h3>
-                        <p class="text-gray-600 mb-3">Weekly Revenue</p>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="gradient-gray h-2 rounded-full" style="width: <?php echo min(100, ($week_revenue / 250000) * 100); ?>%"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid-col-3">
-                    <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.3s">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="w-12 h-12 rounded-xl gradient-mixed flex items-center justify-center shadow-lg">
-                                <i class="fas fa-calendar-alt text-white text-xl"></i>
-                            </div>
-                            <span class="text-xs font-bold text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">Monthly</span>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($month_revenue); ?></h3>
-                        <p class="text-gray-600 mb-3">Monthly Revenue</p>
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class="gradient-mixed h-2 rounded-full" style="width: <?php echo min(100, ($month_revenue / 1000000) * 100); ?>%"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid-col-3">
-                    <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.4s">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 flex items-center justify-center shadow-lg">
-                                <i class="fas fa-shopping-cart text-white text-xl"></i>
-                            </div>
-                            <span class="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">Total</span>
-                        </div>
-                        <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($sales); ?></h3>
-                        <p class="text-gray-600 mb-3">Total Sales</p>
-                        <div class="flex items-center text-sm">
-                            <span class="text-yellow-500 mr-2 flex items-center">
-                                <i class="fas fa-chart-line mr-1"></i>
-                                <?php echo $sales > 0 ? round($sales / 30) : 0; ?>/day avg
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Main Chart Area -->
-                <div class="grid-col-8">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.5s">
-                        <div class="flex flex-col lg:flex-row lg:items-center justify-between mb-6">
-                            <div>
-                                <h3 class="text-xl font-bold text-gray-800">Sales Performance</h3>
-                                <p class="text-gray-600">Your revenue and sales count over last 6 months</p>
-                            </div>
-                            <div class="flex space-x-2 mt-4 lg:mt-0">
-                                <button class="chart-filter active px-4 py-2 bg-yellow-50 text-yellow-600 rounded-lg font-medium" data-filter="revenue">Revenue</button>
-                                <button class="chart-filter px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium" data-filter="sales">Sales Count</button>
-                                <button class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-medium hover:bg-gray-200">
-                                    <i class="fas fa-download"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="h-80">
-                            <canvas id="combinedChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stock Overview -->
-                <div class="grid-col-4">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.6s">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-800">Stock Overview</h3>
-                            <span class="text-sm text-yellow-600 font-medium bg-yellow-50 px-3 py-1 rounded-full">Live</span>
-                        </div>
-                        <div class="h-64 flex flex-col justify-center items-center">
-                            <div class="relative w-40 h-40 mb-6">
-                                <canvas id="stockChart"></canvas>
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <div class="text-center">
-                                        <div class="text-3xl font-bold text-gray-800"><?php echo $active_medicines_count; ?></div>
-                                        <div class="text-sm text-gray-600">Active</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4 w-full">
-                                <div class="text-center p-3 bg-green-50 rounded-lg">
-                                    <div class="text-lg font-bold text-green-600"><?php echo $medicines; ?></div>
-                                    <div class="text-xs text-gray-600">Total Medicines</div>
-                                </div>
-                                <div class="text-center p-3 bg-yellow-50 rounded-lg">
-                                    <div class="text-lg font-bold text-yellow-600"><?php echo number_format($stock); ?></div>
-                                    <div class="text-xs text-gray-600">Total Stock</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Daily Sales Line Chart -->
-                <div class="grid-col-6">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.8s">
-                        <div class="flex items-center justify-between mb-6">
-                            <div>
-                                <h3 class="text-xl font-bold text-gray-800">Daily Sales Trend</h3>
-                                <p class="text-gray-600">Your performance in last 7 days</p>
-                            </div>
-                            <span class="text-sm text-teal-600 bg-teal-50 px-3 py-1 rounded-full">
-                                Weekly View
-                            </span>
-                        </div>
-                        <div class="h-64">
-                            <canvas id="dailyChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Top Selling Medicines -->
-                <div class="grid-col-6">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.9s">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-800">Top Selling Medicines</h3>
-                            <span class="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full">Your Sales</span>
-                        </div>
-                        <div class="space-y-4">
-                            <?php if (count($top_medicines) > 0): ?>
-                                <?php foreach ($top_medicines as $index => $medicine): ?>
-                                    <div class="flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-yellow-100 transition group">
-                                        <div class="flex items-center space-x-3">
-                                            <div class="w-8 h-8 rounded-lg gradient-yellow flex items-center justify-center text-white font-bold shadow">
-                                                <?php echo $index + 1; ?>
+                    <div class="space-y-4">
+                        <?php if (mysqli_num_rows($recent_sales) > 0): ?>
+                            <?php while ($sale = mysqli_fetch_assoc($recent_sales)): ?>
+                                <div class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-yellow-200 transition">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="w-10 h-10 rounded-full gradient-yellow flex items-center justify-center">
+                                                <i class="fas fa-shopping-cart text-white"></i>
                                             </div>
                                             <div>
-                                                <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600"><?php echo htmlspecialchars($medicine['medicine_name']); ?></h4>
-                                                <p class="text-xs text-gray-500">Sold: <?php echo $medicine['total_sold']; ?> units</p>
+                                                <div class="font-bold text-gray-800">#<?php echo str_pad($sale['id'], 6, '0', STR_PAD_LEFT); ?></div>
+                                                <div class="text-sm text-gray-500"><?php echo date('h:i A', strtotime($sale['sale_date'])); ?></div>
                                             </div>
                                         </div>
                                         <div class="text-right">
-                                            <div class="font-bold text-gray-800">Rs <?php echo number_format($medicine['revenue']); ?></div>
-                                            <div class="text-xs text-gray-500">Revenue</div>
+                                            <div class="text-xl font-bold text-yellow-600">Rs <?php echo number_format($sale['total_amount']); ?></div>
                                         </div>
                                     </div>
-                                <?php endforeach; ?>
-                            <?php else: ?>
-                                <div class="text-center py-8">
-                                    <div class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <i class="fas fa-chart-bar text-gray-400"></i>
+                                    <div class="flex justify-between text-sm text-gray-600">
+                                        <span><?php echo date('M j', strtotime($sale['sale_date'])); ?></span>
+                                        <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                                            Completed
+                                        </span>
                                     </div>
-                                    <p class="text-gray-500">No sales data available</p>
                                 </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Inventory Alerts -->
-                <div class="grid-col-4">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1.1s">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-800">Inventory Alerts</h3>
-                            <div class="flex space-x-2">
-                                <span class="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-medium shadow">
-                                    <?php echo count($low_stock); ?> Low
-                                </span>
-                                <span class="px-3 py-1 bg-yellow-100 text-yellow-600 rounded-full text-xs font-medium shadow">
-                                    <?php echo count($expiring_soon); ?> Expiring
-                                </span>
-                            </div>
-                        </div>
-                        <div class="space-y-4 max-h-80 overflow-y-auto custom-scrollbar">
-                            <!-- Low Stock Items -->
-                            <?php if (count($low_stock) > 0): ?>
-                                <?php foreach ($low_stock as $item): ?>
-                                    <div class="p-3 bg-gradient-to-r from-red-50 to-white rounded-lg border border-red-100">
-                                        <div class="flex items-center justify-between mb-2">
-                                            <div class="flex items-center space-x-2">
-                                                <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                                                    <i class="fas fa-exclamation-triangle text-red-600 text-sm"></i>
-                                                </div>
-                                                <h4 class="font-semibold text-gray-800 text-sm"><?php echo htmlspecialchars($item['medicine_name']); ?></h4>
-                                            </div>
-                                            <div class="text-right">
-                                                <div class="text-lg font-bold text-red-600"><?php echo $item['quantity']; ?></div>
-                                                <div class="text-xs text-gray-500">units left</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex justify-between text-xs text-gray-600">
-                                            <span>Expires: <?php echo date('M j', strtotime($item['expiry_date'])); ?></span>
-                                            <span class="<?php echo $item['days_until_expiry'] < 30 ? 'text-red-600 font-medium' : 'text-gray-500'; ?>">
-                                                <?php echo $item['days_until_expiry']; ?> days
-                                            </span>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-
-                            <!-- Expiring Soon Items -->
-                            <?php if (count($expiring_soon) > 0): ?>
-                                <?php foreach ($expiring_soon as $item): ?>
-                                    <div class="p-3 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100">
-                                        <div class="flex items-center justify-between mb-2">
-                                            <div class="flex items-center space-x-2">
-                                                <div class="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
-                                                    <i class="fas fa-clock text-yellow-600 text-sm"></i>
-                                                </div>
-                                                <h4 class="font-semibold text-gray-800 text-sm"><?php echo htmlspecialchars($item['medicine_name']); ?></h4>
-                                            </div>
-                                            <div class="text-right">
-                                                <div class="text-lg font-bold text-yellow-600"><?php echo $item['quantity']; ?></div>
-                                                <div class="text-xs text-gray-500">in stock</div>
-                                            </div>
-                                        </div>
-                                        <div class="flex justify-between text-xs text-gray-600">
-                                            <span>Expires: <?php echo date('M j', strtotime($item['expiry_date'])); ?></span>
-                                            <span class="text-red-600 font-medium">
-                                                <?php echo $item['days_until_expiry']; ?> days left
-                                            </span>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-
-                            <?php if (count($low_stock) == 0 && count($expiring_soon) == 0): ?>
-                                <div class="text-center py-8">
-                                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 shadow">
-                                        <i class="fas fa-check text-green-600"></i>
-                                    </div>
-                                    <p class="text-gray-500">No inventory alerts</p>
+                            <?php endwhile; ?>
+                        <?php else: ?>
+                            <div class="text-center py-8">
+                                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <i class="fas fa-shopping-cart text-gray-400 text-xl"></i>
                                 </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions -->
-                <div class="grid-col-4">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1s">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-800">Quick Actions</h3>
-                            <span class="text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Daily Tasks</span>
-                        </div>
-                        <div class="space-y-4">
-                            <a href="create_sale.php" class="p-4 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100 hover:border-yellow-300 transition group flex items-center space-x-4">
-                                <div class="w-12 h-12 rounded-lg gradient-yellow flex items-center justify-center">
-                                    <i class="fas fa-cash-register text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600">Create New Sale</h4>
-                                    <p class="text-xs text-gray-500">Process customer purchase</p>
-                                </div>
-                                <i class="fas fa-chevron-right text-gray-400 group-hover:text-yellow-600"></i>
-                            </a>
-
-                            <a href="add_stock.php" class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-gray-300 transition group flex items-center space-x-4">
-                                <div class="w-12 h-12 rounded-lg gradient-gray flex items-center justify-center">
-                                    <i class="fas fa-plus-circle text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-800 text-sm group-hover:text-gray-600">Add Stock</h4>
-                                    <p class="text-xs text-gray-500">Add new medicine batch</p>
-                                </div>
-                                <i class="fas fa-chevron-right text-gray-400 group-hover:text-gray-600"></i>
-                            </a>
-
-                            <a href="medicines.php" class="p-4 bg-gradient-to-r from-yellow-50 to-white rounded-lg border border-yellow-100 hover:border-yellow-300 transition group flex items-center space-x-4">
-                                <div class="w-12 h-12 rounded-lg gradient-yellow flex items-center justify-center">
-                                    <i class="fas fa-pills text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-800 text-sm group-hover:text-yellow-600">Browse Medicines</h4>
-                                    <p class="text-xs text-gray-500">View medicine catalog</p>
-                                </div>
-                                <i class="fas fa-chevron-right text-gray-400 group-hover:text-yellow-600"></i>
-                            </a>
-
-                            <a href="stock.php" class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-gray-300 transition group flex items-center space-x-4">
-                                <div class="w-12 h-12 rounded-lg gradient-gray flex items-center justify-center">
-                                    <i class="fas fa-boxes text-white text-xl"></i>
-                                </div>
-                                <div class="flex-1">
-                                    <h4 class="font-semibold text-gray-800 text-sm group-hover:text-gray-600">Check Stock</h4>
-                                    <p class="text-xs text-gray-500">Review inventory levels</p>
-                                </div>
-                                <i class="fas fa-chevron-right text-gray-400 group-hover:text-gray-600"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Sales Activity -->
-                <div class="grid-col-4">
-                    <div class="chart-container rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 1.2s">
-                        <div class="flex items-center justify-between mb-6">
-                            <h3 class="text-xl font-bold text-gray-800">Recent Sales</h3>
-                            <a href="sales.php" class="text-sm text-yellow-600 hover:text-yellow-800 font-medium flex items-center">
-                                View All <i class="fas fa-arrow-right ml-2"></i>
-                            </a>
-                        </div>
-                        <div class="space-y-4">
-                            <?php if (mysqli_num_rows($recent_sales) > 0): ?>
-                                <?php while ($sale = mysqli_fetch_assoc($recent_sales)): ?>
-                                    <div class="p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border border-gray-100 hover:border-yellow-200 transition">
-                                        <div class="flex items-center justify-between mb-3">
-                                            <div class="flex items-center space-x-2">
-                                                <div class="w-10 h-10 rounded-full gradient-yellow flex items-center justify-center">
-                                                    <i class="fas fa-shopping-cart text-white"></i>
-                                                </div>
-                                                <div>
-                                                    <div class="font-bold text-gray-800">#<?php echo str_pad($sale['id'], 6, '0', STR_PAD_LEFT); ?></div>
-                                                    <div class="text-sm text-gray-500"><?php echo date('h:i A', strtotime($sale['sale_date'])); ?></div>
-                                                </div>
-                                            </div>
-                                            <div class="text-right">
-                                                <div class="text-xl font-bold text-yellow-600">Rs <?php echo number_format($sale['total_amount']); ?></div>
-                                            </div>
-                                        </div>
-                                        <div class="flex justify-between text-sm text-gray-600">
-                                            <span><?php echo date('M j', strtotime($sale['sale_date'])); ?></span>
-                                            <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                                                Completed
-                                            </span>
-                                        </div>
-                                    </div>
-                                <?php endwhile; ?>
-                            <?php else: ?>
-                                <div class="text-center py-8">
-                                    <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <i class="fas fa-shopping-cart text-gray-400 text-xl"></i>
-                                    </div>
-                                    <p class="text-gray-500">No recent sales found</p>
+                                <p class="text-gray-500">No recent sales found</p>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -999,6 +1043,72 @@ $active_medicines_count = mysqli_fetch_assoc($active_medicines)['active_medicine
             </div>
         </main>
     </div>
+</div>
+
+<!-- Add JavaScript for dropdown functionality -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Dropdown functionality
+        const medicinesToggle = document.querySelector('.medicines-dropdown-toggle');
+        const stockToggle = document.querySelector('.stock-dropdown-toggle');
+        const saleToggle = document.querySelector('.sale-dropdown-toggle');
+
+        const medicinesSubmenu = document.querySelector('.medicines-submenu');
+        const stockSubmenu = document.querySelector('.stock-submenu');
+        const saleSubmenu = document.querySelector('.sale-submenu');
+
+        // Toggle dropdowns
+        function toggleDropdown(toggleBtn, submenu, chevron) {
+            toggleBtn.addEventListener('click', () => {
+                const isExpanded = !submenu.classList.contains('hidden');
+                
+                // Close all other dropdowns
+                [medicinesSubmenu, stockSubmenu, saleSubmenu].forEach(menu => {
+                    if (menu !== submenu) {
+                        menu.classList.add('hidden');
+                        const otherBtn = menu.previousElementSibling;
+                        if (otherBtn) {
+                            otherBtn.querySelector('.fa-chevron-down').classList.remove('rotate-180');
+                        }
+                    }
+                });
+
+                // Toggle current dropdown
+                submenu.classList.toggle('hidden');
+                chevron.classList.toggle('rotate-180');
+            });
+        }
+
+        if (medicinesToggle && medicinesSubmenu) {
+            toggleDropdown(medicinesToggle, medicinesSubmenu, medicinesToggle.querySelector('.fa-chevron-down'));
+        }
+
+        if (stockToggle && stockSubmenu) {
+            toggleDropdown(stockToggle, stockSubmenu, stockToggle.querySelector('.fa-chevron-down'));
+        }
+
+        if (saleToggle && saleSubmenu) {
+            toggleDropdown(saleToggle, saleSubmenu, saleToggle.querySelector('.fa-chevron-down'));
+        }
+
+        // Mobile sidebar toggle
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+
+        if (sidebarToggle && sidebar && sidebarOverlay) {
+            sidebarToggle.addEventListener('click', () => {
+                sidebar.classList.toggle('-translate-x-full');
+                sidebarOverlay.classList.toggle('hidden');
+            });
+
+            sidebarOverlay.addEventListener('click', () => {
+                sidebar.classList.add('-translate-x-full');
+                sidebarOverlay.classList.add('hidden');
+            });
+        }
+    });
+</script>
 
     <!-- Footer -->
     <?php include "../includes/footer.php"; ?>

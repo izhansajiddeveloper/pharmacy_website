@@ -18,11 +18,12 @@ if (!$stock) {
 // Get medicine name for display
 $medicine_info = mysqli_fetch_assoc(mysqli_query(
     $conn,
-    "SELECT m.name, m.generic_name FROM medicines m WHERE m.id={$stock['medicine_id']}"
+    "SELECT m.name FROM medicines m WHERE m.id={$stock['medicine_id']}"
 ));
+;
 
 // Fetch all medicines for dropdown
-$medicines = mysqli_query($conn, "SELECT id, name, generic_name FROM medicines ORDER BY name");
+$medicines = mysqli_query($conn, "SELECT id, name, generic_id FROM medicines ORDER BY id");
 // Fetch suppliers
 $suppliers = mysqli_query($conn, "SELECT id, name FROM suppliers ORDER BY name");
 

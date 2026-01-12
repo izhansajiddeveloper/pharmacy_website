@@ -24,7 +24,8 @@ $user_name = $_SESSION['name'];
         </div>
 
         <!-- Navigation -->
-        <nav class="space-y-2">
+        <nav class="space-y-1">
+            <!-- Dashboard -->
             <a href="dashboard.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'gradient-yellow text-white shadow-lg' : ''; ?>">
                 <div class="w-8 h-8 rounded-lg <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'bg-white/20' : 'bg-gray-700/50'; ?> flex items-center justify-center">
                     <i class="fas fa-tachometer-alt <?php echo basename($_SERVER['PHP_SELF']) == 'dashboard.php' ? 'text-white' : 'text-gray-300'; ?> text-lg"></i>
@@ -37,239 +38,200 @@ $user_name = $_SESSION['name'];
                 <?php endif; ?>
             </a>
 
-            <a href="medicines.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-pills text-gray-300 text-lg"></i>
+            <!-- Medicines Dropdown -->
+            <div class="space-y-1">
+                <button type="button" class="medicines-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? 'bg-blue-500/10 border-l-4 border-blue-500' : ''; ?>">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? 'bg-blue-500/20' : 'bg-gray-700/50'; ?> flex items-center justify-center">
+                            <i class="fas fa-pills <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? 'text-blue-400' : 'text-gray-300'; ?> text-lg"></i>
+                        </div>
+                        <span class="font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? 'text-blue-200' : 'text-gray-200'; ?>">Medicines</span>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                </button>
+                
+                <!-- Medicines Submenu -->
+                <div class="medicines-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? '' : 'hidden'; ?>">
+                    <!-- All Medicines -->
+                    <a href="medicines.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'bg-blue-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'text-blue-200' : 'text-gray-300'; ?>">All Medicines</span>
+                    </a>
+                    
+                    <!-- Search Brand -->
+                    <a href="search_brand.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'bg-blue-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Search Brand</span>
+                    </a>
+                    
+                    <!-- Search Generic -->
+                    <a href="search_generic.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'bg-blue-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Search Generic</span>
+                    </a>
+                    
+                    <!-- Return to Company -->
+                    <a href="return_to_company.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'bg-blue-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Return to Company</span>
+                    </a>
+                    
+                    <!-- Expired Medicines -->
+                    <a href="expired_medicines.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'bg-red-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'bg-red-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'text-red-200' : 'text-gray-300'; ?>">Expired Medicines</span>
+                        <?php if (basename($_SERVER['PHP_SELF']) != 'expired_medicines.php'): ?>
+                            <?php
+                            // Get expired medicines count
+                            $expired_query = "SELECT COUNT(*) as count FROM stock_batches WHERE is_expired = 1";
+                            $expired_result = mysqli_query($conn, $expired_query);
+                            $expired_count = mysqli_fetch_assoc($expired_result)['count'];
+                            ?>
+                            <?php if ($expired_count > 0): ?>
+                                <span class="ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium animate-pulse">
+                                    <?php echo $expired_count; ?>
+                                </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </a>
                 </div>
-                <span class="font-medium text-gray-200">Medicines</span>
-                <?php if (in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php'])): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <a href="search_brand.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-search text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Search Brand</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'search_brand.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <a href="search_generic.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-search-plus text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Search Generic</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'search_generic.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <a href="stock.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-boxes text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Stock</span>
-                <?php if (in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php'])): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <a href="add_stock.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-plus-circle text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Add Stock</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'add_stock.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <!-- Expired Medicines Section -->
-            <a href="expired_medicines.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'bg-red-500/20 border-l-4 border-red-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-skull-crossbones <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'text-red-400' : 'text-gray-300'; ?> text-lg"></i>
-                </div>
-                <span class="font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'text-red-200' : 'text-gray-200'; ?>">Expired Medicines</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'expired_medicines.php'): ?>
-                    <span class="ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium">
-                        <i class="fas fa-exclamation-triangle"></i>
-                    </span>
-                <?php else: ?>
-                    <?php
-                    // Get expired medicines count
-                    $expired_query = "SELECT COUNT(*) as count FROM stock_batches WHERE is_expired = 1";
-                    $expired_result = mysqli_query($conn, $expired_query);
-                    $expired_count = mysqli_fetch_assoc($expired_result)['count'];
-                    ?>
-                    <?php if ($expired_count > 0): ?>
-                        <span class="ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium animate-pulse">
-                            <?php echo $expired_count; ?>
-                        </span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </a>
-
-            <!-- Return to Company Section -->
-            <a href="return_to_company.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'bg-indigo-500/20 border-l-4 border-indigo-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-undo-alt <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'text-indigo-400' : 'text-gray-300'; ?> text-lg"></i>
-                </div>
-                <span class="font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'text-indigo-200' : 'text-gray-200'; ?>">Return to Company</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'return_to_company.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-indigo-100 text-xs"></i>
-                    </span>
-                <?php else: ?>
-                    <?php
-                    // Get returns count
-                    $returns_query = "SELECT COUNT(*) as count FROM returns_to_company WHERE DATE(returned_at) = CURDATE()";
-                    $returns_result = mysqli_query($conn, $returns_query);
-                    $returns_today = mysqli_fetch_assoc($returns_result)['count'];
-                    ?>
-                    <?php if ($returns_today > 0): ?>
-                        <span class="ml-auto bg-indigo-500/20 text-indigo-300 text-xs px-2 py-1 rounded-full font-medium">
-                            <?php echo $returns_today; ?> today
-                        </span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </a>
-
-            <!-- Payments Section -->
-            <a href="payments.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'bg-blue-500/20 border-l-4 border-blue-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-credit-card <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'text-blue-400' : 'text-gray-300'; ?> text-lg"></i>
-                </div>
-                <span class="font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'text-blue-200' : 'text-gray-200'; ?>">Payments</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'payments.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-blue-100 text-xs"></i>
-                    </span>
-                <?php else: ?>
-                    <?php
-                    // Get today's payments count
-                    $payments_query = "SELECT COUNT(*) as count FROM payments WHERE DATE(payment_date) = CURDATE() AND created_by = ?";
-                    $stmt = mysqli_prepare($conn, $payments_query);
-                    mysqli_stmt_bind_param($stmt, "i", $_SESSION['user_id']);
-                    mysqli_stmt_execute($stmt);
-                    $payments_result = mysqli_stmt_get_result($stmt);
-                    $payments_today = mysqli_fetch_assoc($payments_result)['count'];
-                    mysqli_stmt_close($stmt);
-                    ?>
-                    <?php if ($payments_today > 0): ?>
-                        <span class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full font-medium">
-                            <?php echo $payments_today; ?> today
-                        </span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </a>
-
-            <a href="sales.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-shopping-cart text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Sales</span>
-                <?php if (in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php'])): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-yellow-100 text-xs"></i>
-                    </span>
-                <?php endif; ?>
-            </a>
-
-            <a href="create_sale.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'create_sale.php' ? 'bg-yellow-500/20 border-l-4 border-yellow-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-cash-register text-gray-300 text-lg"></i>
-                </div>
-                <span class="font-medium text-gray-200">Create Sale</span>
-                <span class="ml-auto bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium">
-                    <i class="fas fa-bolt"></i>
-                </span>
-            </a>
-
-            <!-- Divider before Financial Section -->
-            <div class="my-4 border-t border-gray-700/50"></div>
-
-            <!-- Financial Management Section -->
-            <div class="px-4 py-2">
-                <h4 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Financial Management</h4>
             </div>
 
-            <!-- Expenses Section -->
-            <a href="expenses.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'bg-red-500/20 border-l-4 border-red-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-file-invoice-dollar <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'text-red-400' : 'text-gray-300'; ?> text-lg"></i>
+            <!-- Stock Dropdown -->
+            <div class="space-y-1">
+                <button type="button" class="stock-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? 'bg-green-500/10 border-l-4 border-green-500' : ''; ?>">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? 'bg-green-500/20' : 'bg-gray-700/50'; ?> flex items-center justify-center">
+                            <i class="fas fa-boxes <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? 'text-green-400' : 'text-gray-300'; ?> text-lg"></i>
+                        </div>
+                        <span class="font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? 'text-green-200' : 'text-gray-200'; ?>">Stock</span>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                </button>
+                
+                <!-- Stock Submenu -->
+                <div class="stock-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? '' : 'hidden'; ?>">
+                    <!-- View Stock -->
+                    <a href="stock.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'stock.php' ? 'bg-green-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'stock.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'stock.php' ? 'text-green-200' : 'text-gray-300'; ?>">View Stock</span>
+                    </a>
+                    
+                    <!-- Add Stock -->
+                    <a href="add_stock.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'bg-green-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'text-green-200' : 'text-gray-300'; ?>">Add Stock</span>
+                    </a>
                 </div>
-                <span class="font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'text-red-200' : 'text-gray-200'; ?>">Expenses</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'expenses.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-red-100 text-xs"></i>
-                    </span>
-                <?php else: ?>
-                    <?php
-                    // Get total expenses for current month
-                    $monthly_expenses_query = "SELECT SUM(amount) as total FROM expenses 
-                        WHERE MONTH(expense_date) = MONTH(CURDATE()) 
-                        AND YEAR(expense_date) = YEAR(CURDATE())";
-                    $monthly_expenses_result = mysqli_query($conn, $monthly_expenses_query);
-                    $monthly_expenses = mysqli_fetch_assoc($monthly_expenses_result)['total'] ?? 0;
-                    ?>
-                    <?php if ($monthly_expenses > 0): ?>
-                        <span class="ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium">
-                            Rs <?php echo number_format($monthly_expenses, 0); ?>
-                        </span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </a>
+            </div>
 
-            <!-- Profit Analysis Section -->
-            <a href="profit.php" class="flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'bg-green-500/20 border-l-4 border-green-500' : ''; ?>">
-                <div class="w-8 h-8 rounded-lg bg-gray-700/50 flex items-center justify-center">
-                    <i class="fas fa-chart-line <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'text-green-400' : 'text-gray-300'; ?> text-lg"></i>
-                </div>
-                <span class="font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'text-green-200' : 'text-gray-200'; ?>">Profit Analysis</span>
-                <?php if (basename($_SERVER['PHP_SELF']) == 'profit.php'): ?>
-                    <span class="ml-auto">
-                        <i class="fas fa-chevron-right text-green-100 text-xs"></i>
-                    </span>
-                <?php else: ?>
-                    <?php
-                    // Calculate current month profit/loss
-                    $profit_query = mysqli_query($conn, "
-                        SELECT 
-                            (SELECT COALESCE(SUM(CASE WHEN payment_type = 'sale' AND payment_status = 'completed' 
-                                THEN transaction_net_amount ELSE 0 END), 0) FROM payments 
-                                WHERE MONTH(payment_date) = MONTH(CURDATE()) 
-                                AND YEAR(payment_date) = YEAR(CURDATE())) as revenue,
-                            (SELECT COALESCE(SUM(CASE WHEN payment_type = 'return_to_company' AND payment_status = 'completed' 
-                                THEN amount ELSE 0 END), 0) FROM payments 
-                                WHERE MONTH(payment_date) = MONTH(CURDATE()) 
-                                AND YEAR(payment_date) = YEAR(CURDATE())) as returns_cost,
-                            (SELECT COALESCE(SUM(amount), 0) FROM expenses 
-                                WHERE MONTH(expense_date) = MONTH(CURDATE()) 
-                                AND YEAR(expense_date) = YEAR(CURDATE())) as expenses
-                    ");
-                    $profit_data = mysqli_fetch_assoc($profit_query);
-                    $monthly_profit = ($profit_data['revenue'] - $profit_data['returns_cost'] - $profit_data['expenses']);
-                    ?>
-                    <?php if ($monthly_profit != 0): ?>
-                        <span class="ml-auto <?php echo $monthly_profit >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'; ?> text-xs px-2 py-1 rounded-full font-medium">
-                            <?php echo $monthly_profit >= 0 ? '↗' : '↘'; ?> Rs <?php echo number_format(abs($monthly_profit), 0); ?>
+            <!-- Sale Dropdown -->
+            <div class="space-y-1">
+                <button type="button" class="sale-dropdown-toggle flex items-center justify-between w-full px-4 py-3 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? 'bg-purple-500/10 border-l-4 border-purple-500' : ''; ?>">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-lg <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? 'bg-purple-500/20' : 'bg-gray-700/50'; ?> flex items-center justify-center">
+                            <i class="fas fa-shopping-cart <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? 'text-purple-400' : 'text-gray-300'; ?> text-lg"></i>
+                        </div>
+                        <span class="font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? 'text-purple-200' : 'text-gray-200'; ?>">Sale</span>
+                    </div>
+                    <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
+                </button>
+                
+                <!-- Sale Submenu -->
+                <div class="sale-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? '' : 'hidden'; ?>">
+                    <!-- Create Sale -->
+                    <a href="create_sale.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'create_sale.php' ? 'bg-purple-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'create_sale.php' ? 'bg-purple-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'create_sale.php' ? 'text-purple-200' : 'text-gray-300'; ?>">Create Sale</span>
+                        <span class="ml-auto bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium">
+                            <i class="fas fa-bolt"></i>
                         </span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </a>
+                    </a>
+                    
+                    <!-- View Sales -->
+                    <a href="sales.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'bg-purple-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'bg-purple-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'text-purple-200' : 'text-gray-300'; ?>">View Sales</span>
+                    </a>
+                    
+                    <!-- Payments -->
+                    <a href="payments.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'bg-blue-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Payments</span>
+                        <?php if (basename($_SERVER['PHP_SELF']) != 'payments.php'): ?>
+                            <?php
+                            // Get today's payments count
+                            $payments_query = "SELECT COUNT(*) as count FROM payments WHERE DATE(payment_date) = CURDATE() AND created_by = ?";
+                            $stmt = mysqli_prepare($conn, $payments_query);
+                            mysqli_stmt_bind_param($stmt, "i", $_SESSION['user_id']);
+                            mysqli_stmt_execute($stmt);
+                            $payments_result = mysqli_stmt_get_result($stmt);
+                            $payments_today = mysqli_fetch_assoc($payments_result)['count'];
+                            mysqli_stmt_close($stmt);
+                            ?>
+                            <?php if ($payments_today > 0): ?>
+                                <span class="ml-auto bg-blue-500/20 text-blue-300 text-xs px-2 py-1 rounded-full font-medium">
+                                    <?php echo $payments_today; ?> today
+                                </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </a>
+                    
+                    <!-- Expenses -->
+                    <a href="expenses.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'bg-red-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'bg-red-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'text-red-200' : 'text-gray-300'; ?>">Expenses</span>
+                        <?php if (basename($_SERVER['PHP_SELF']) != 'expenses.php'): ?>
+                            <?php
+                            // Get total expenses for current month
+                            $monthly_expenses_query = "SELECT SUM(amount) as total FROM expenses 
+                                WHERE MONTH(expense_date) = MONTH(CURDATE()) 
+                                AND YEAR(expense_date) = YEAR(CURDATE())";
+                            $monthly_expenses_result = mysqli_query($conn, $monthly_expenses_query);
+                            $monthly_expenses = mysqli_fetch_assoc($monthly_expenses_result)['total'] ?? 0;
+                            ?>
+                            <?php if ($monthly_expenses > 0): ?>
+                                <span class="ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium">
+                                    Rs <?php echo number_format($monthly_expenses, 0); ?>
+                                </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </a>
+                    
+                    <!-- Profit Analysis -->
+                    <a href="profit.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'bg-green-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'text-green-200' : 'text-gray-300'; ?>">Profit Analysis</span>
+                        <?php if (basename($_SERVER['PHP_SELF']) != 'profit.php'): ?>
+                            <?php
+                            // Calculate current month profit/loss
+                            $profit_query = mysqli_query($conn, "
+                                SELECT 
+                                    (SELECT COALESCE(SUM(CASE WHEN payment_type = 'sale' AND payment_status = 'completed' 
+                                        THEN transaction_net_amount ELSE 0 END), 0) FROM payments 
+                                        WHERE MONTH(payment_date) = MONTH(CURDATE()) 
+                                        AND YEAR(payment_date) = YEAR(CURDATE())) as revenue,
+                                    (SELECT COALESCE(SUM(CASE WHEN payment_type = 'return_to_company' AND payment_status = 'completed' 
+                                        THEN amount ELSE 0 END), 0) FROM payments 
+                                        WHERE MONTH(payment_date) = MONTH(CURDATE()) 
+                                        AND YEAR(payment_date) = YEAR(CURDATE())) as returns_cost,
+                                    (SELECT COALESCE(SUM(amount), 0) FROM expenses 
+                                        WHERE MONTH(expense_date) = MONTH(CURDATE()) 
+                                        AND YEAR(expense_date) = YEAR(CURDATE())) as expenses
+                            ");
+                            $profit_data = mysqli_fetch_assoc($profit_query);
+                            $monthly_profit = ($profit_data['revenue'] - $profit_data['returns_cost'] - $profit_data['expenses']);
+                            ?>
+                            <?php if ($monthly_profit != 0): ?>
+                                <span class="ml-auto <?php echo $monthly_profit >= 0 ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'; ?> text-xs px-2 py-1 rounded-full font-medium">
+                                    <?php echo $monthly_profit >= 0 ? '↗' : '↘'; ?> Rs <?php echo number_format(abs($monthly_profit), 0); ?>
+                                </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </a>
+                </div>
+            </div>
+
         </nav>
 
         <!-- Divider -->
@@ -535,6 +497,10 @@ $user_name = $_SESSION['name'];
         background: linear-gradient(135deg, #10b981, #059669);
     }
 
+    .gradient-purple {
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+    }
+
     .gradient-gray {
         background: linear-gradient(135deg, #6b7280, #9ca3af);
     }
@@ -646,41 +612,100 @@ $user_name = $_SESSION['name'];
             });
         }
 
-        // Update active state based on current page
-        const currentPage = window.location.pathname.split('/').pop();
-        const navLinks = document.querySelectorAll('#sidebar nav a');
+        // Dropdown functionality
+        const medicinesToggle = document.querySelector('.medicines-dropdown-toggle');
+        const stockToggle = document.querySelector('.stock-dropdown-toggle');
+        const saleToggle = document.querySelector('.sale-dropdown-toggle');
 
+        const medicinesSubmenu = document.querySelector('.medicines-submenu');
+        const stockSubmenu = document.querySelector('.stock-submenu');
+        const saleSubmenu = document.querySelector('.sale-submenu');
+
+        // Toggle dropdowns
+        function toggleDropdown(toggleBtn, submenu, chevron) {
+            toggleBtn.addEventListener('click', () => {
+                const isExpanded = !submenu.classList.contains('hidden');
+                
+                // Close all other dropdowns
+                [medicinesSubmenu, stockSubmenu, saleSubmenu].forEach(menu => {
+                    if (menu !== submenu) {
+                        menu.classList.add('hidden');
+                        const otherBtn = menu.previousElementSibling;
+                        if (otherBtn) {
+                            otherBtn.querySelector('.fa-chevron-down').classList.remove('rotate-180');
+                        }
+                    }
+                });
+
+                // Toggle current dropdown
+                submenu.classList.toggle('hidden');
+                chevron.classList.toggle('rotate-180');
+            });
+        }
+
+        if (medicinesToggle && medicinesSubmenu) {
+            toggleDropdown(medicinesToggle, medicinesSubmenu, medicinesToggle.querySelector('.fa-chevron-down'));
+        }
+
+        if (stockToggle && stockSubmenu) {
+            toggleDropdown(stockToggle, stockSubmenu, stockToggle.querySelector('.fa-chevron-down'));
+        }
+
+        if (saleToggle && saleSubmenu) {
+            toggleDropdown(saleToggle, saleSubmenu, saleToggle.querySelector('.fa-chevron-down'));
+        }
+
+        // Open dropdown based on current page
+        const currentPage = window.location.pathname.split('/').pop();
+        
+        // Define which pages belong to which dropdown
+        const medicinesPages = ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php'];
+        const stockPages = ['stock.php', 'add_stock.php', 'edit_stock.php'];
+        const salePages = ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php'];
+
+        if (medicinesPages.includes(currentPage)) {
+            if (medicinesSubmenu) {
+                medicinesSubmenu.classList.remove('hidden');
+                const chevron = medicinesToggle.querySelector('.fa-chevron-down');
+                if (chevron) chevron.classList.add('rotate-180');
+            }
+        } else if (stockPages.includes(currentPage)) {
+            if (stockSubmenu) {
+                stockSubmenu.classList.remove('hidden');
+                const chevron = stockToggle.querySelector('.fa-chevron-down');
+                if (chevron) chevron.classList.add('rotate-180');
+            }
+        } else if (salePages.includes(currentPage)) {
+            if (saleSubmenu) {
+                saleSubmenu.classList.remove('hidden');
+                const chevron = saleToggle.querySelector('.fa-chevron-down');
+                if (chevron) chevron.classList.add('rotate-180');
+            }
+        }
+
+        // Highlight active page
+        const navLinks = document.querySelectorAll('#sidebar nav a');
         navLinks.forEach(link => {
             const href = link.getAttribute('href');
             if (href === currentPage) {
-                if (href === 'expired_medicines.php') {
-                    link.classList.add('bg-red-500/20', 'border-l-4', 'border-red-500');
-                    link.querySelector('span').classList.add('text-red-200');
-                    link.querySelector('i').classList.add('text-red-400');
-                } else if (href === 'return_to_company.php') {
-                    link.classList.add('bg-indigo-500/20', 'border-l-4', 'border-indigo-500');
-                    link.querySelector('span').classList.add('text-indigo-200');
-                    link.querySelector('i').classList.add('text-indigo-400');
-                } else if (href === 'payments.php') {
-                    link.classList.add('bg-blue-500/20', 'border-l-4', 'border-blue-500');
-                    link.querySelector('span').classList.add('text-blue-200');
-                    link.querySelector('i').classList.add('text-blue-400');
-                } else if (href === 'expenses.php') {
-                    link.classList.add('bg-red-500/20', 'border-l-4', 'border-red-500');
-                    link.querySelector('span').classList.add('text-red-200');
-                    link.querySelector('i').classList.add('text-red-400');
-                } else if (href === 'profit.php') {
-                    link.classList.add('bg-green-500/20', 'border-l-4', 'border-green-500');
-                    link.querySelector('span').classList.add('text-green-200');
-                    link.querySelector('i').classList.add('text-green-400');
-                } else {
-                    link.classList.add('gradient-yellow', 'text-white', 'shadow-lg');
-                    link.querySelector('div').classList.remove('bg-gray-700/50');
-                    link.querySelector('div').classList.add('bg-white/20');
-                    link.querySelector('i').classList.remove('text-gray-300');
-                    link.querySelector('i').classList.add('text-white');
-                    link.querySelector('span').classList.remove('text-gray-200');
-                    link.querySelector('span').classList.add('text-white');
+                // Remove all active classes
+                link.classList.remove('bg-gray-700/50');
+                
+                // Add appropriate active class based on section
+                if (medicinesPages.includes(currentPage)) {
+                    link.classList.add('bg-blue-500/20');
+                } else if (stockPages.includes(currentPage)) {
+                    link.classList.add('bg-green-500/20');
+                } else if (salePages.includes(currentPage)) {
+                    if (currentPage === 'payments.php') {
+                        link.classList.add('bg-blue-500/20');
+                    } else if (currentPage === 'expenses.php') {
+                        link.classList.add('bg-red-500/20');
+                    } else if (currentPage === 'profit.php') {
+                        link.classList.add('bg-green-500/20');
+                    } else {
+                        link.classList.add('bg-purple-500/20');
+                    }
                 }
             }
         });
@@ -689,56 +714,29 @@ $user_name = $_SESSION['name'];
         const expiredCount = <?php echo $expired_stock_count ?? 0; ?>;
         const expiredLink = document.querySelector('a[href="expired_medicines.php"]');
 
-        if (expiredCount > 0 && !expiredLink.classList.contains('bg-red-500/20')) {
-            expiredLink.classList.add('animate-warning-pulse');
-            // Add warning icon
-            const warningIcon = document.createElement('span');
-            warningIcon.className = 'absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center';
-            warningIcon.innerHTML = '<i class="fas fa-exclamation text-xs"></i>';
-            expiredLink.appendChild(warningIcon);
+        if (expiredCount > 0 && currentPage !== 'expired_medicines.php') {
+            if (expiredLink) {
+                expiredLink.classList.add('animate-warning-pulse');
+            }
         }
 
         // Highlight payments link if there are pending payments
         const pendingAmount = <?php echo $payment_stats['pending_amount'] ?? 0; ?>;
         const paymentsLink = document.querySelector('a[href="payments.php"]');
 
-        if (pendingAmount > 0 && !paymentsLink.classList.contains('bg-blue-500/20')) {
-            // Add float animation to payments link
-            paymentsLink.classList.add('animate-float');
-
-            // Add pending badge
-            const pendingBadge = document.createElement('span');
-            pendingBadge.className = 'ml-auto bg-yellow-500/20 text-yellow-300 text-xs px-2 py-1 rounded-full font-medium animate-pulse';
-            pendingBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>Pending';
-
-            // Remove existing today badge if exists
-            const existingBadge = paymentsLink.querySelector('span.ml-auto');
-            if (existingBadge) {
-                existingBadge.remove();
+        if (pendingAmount > 0 && currentPage !== 'payments.php') {
+            if (paymentsLink) {
+                paymentsLink.classList.add('animate-float');
             }
-
-            paymentsLink.appendChild(pendingBadge);
         }
 
         // Highlight profit link if there's significant profit or loss
         const monthlyProfit = <?php echo $monthly_profit ?? 0; ?>;
         const profitLink = document.querySelector('a[href="profit.php"]');
 
-        if (Math.abs(monthlyProfit) > 10000) { // Highlight if profit/loss > 10,000
-            if (monthlyProfit > 0) {
-                // Add profit animation for positive profit
+        if (Math.abs(monthlyProfit) > 10000 && currentPage !== 'profit.php') {
+            if (profitLink) {
                 profitLink.classList.add('animate-profit-pulse');
-                const profitBadge = document.createElement('span');
-                profitBadge.className = 'absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center animate-pulse';
-                profitBadge.innerHTML = '<i class="fas fa-arrow-up text-xs"></i>';
-                profitLink.appendChild(profitBadge);
-            } else {
-                // Add warning animation for loss
-                profitLink.classList.add('animate-warning-pulse');
-                const lossBadge = document.createElement('span');
-                lossBadge.className = 'absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-pulse';
-                lossBadge.innerHTML = '<i class="fas fa-exclamation text-xs"></i>';
-                profitLink.appendChild(lossBadge);
             }
         }
 
@@ -754,10 +752,13 @@ $user_name = $_SESSION['name'];
                             expiredBadge.textContent = data.expired_count;
                         } else if (data.expired_count > 0) {
                             // Create badge if doesn't exist
-                            const badge = document.createElement('span');
-                            badge.className = 'ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium animate-pulse';
-                            badge.textContent = data.expired_count;
-                            expiredLink.appendChild(badge);
+                            const expiredLink = document.querySelector('a[href="expired_medicines.php"]');
+                            if (expiredLink) {
+                                const badge = document.createElement('span');
+                                badge.className = 'ml-auto bg-red-500/20 text-red-300 text-xs px-2 py-1 rounded-full font-medium animate-pulse';
+                                badge.textContent = data.expired_count;
+                                expiredLink.appendChild(badge);
+                            }
                         }
 
                         // Update returns count
