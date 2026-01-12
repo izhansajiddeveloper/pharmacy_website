@@ -189,6 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $medicines_query = "SELECT 
                         m.id,
                         m.name,
+                        m.generic_id,
                         GROUP_CONCAT(
                             DISTINCT CONCAT(
                                 sb.id, '|', 
@@ -205,9 +206,7 @@ $medicines_query = "SELECT
                         AND sb.quantity > 0
                     GROUP BY m.id
                     ORDER BY m.name";
-
 $medicines_result = mysqli_query($conn, $medicines_query);
-
 ?>
 
 <!DOCTYPE html>

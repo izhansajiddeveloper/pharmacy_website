@@ -2,41 +2,92 @@
 require_once "../config/db.php";
 require_once "../includes/auth_check.php";
 
-if ($_SESSION['role'] !== 'pharmacist') {
+// Both admin and pharmacists can view stock
+if (!in_array($_SESSION['role'], ['admin', 'pharmacist'])) {
     header("Location: ../index.php");
     exit;
 }
 
-$id = intval($_GET['id']);
-$stock = mysqli_fetch_assoc(
-    mysqli_query($conn, "SELECT sb.*, 
-                                 m.name AS medicine_name,
-                                 c.name AS category_name, 
-                                 t.name AS type_name,
-                                 s.name AS supplier_name
-                          FROM stock_batches sb
-                          JOIN medicines m ON sb.medicine_id = m.id
-                          LEFT JOIN medicine_categories c ON m.category_id = c.id
-                          LEFT JOIN medicine_types t ON m.type_id = t.id
-                          LEFT JOIN suppliers s ON sb.supplier_id = s.id
-                          WHERE sb.id=$id")
-);
-
-
-if (!$stock) {
+// Check if medicine_id is provided
+if (!isset($_GET['medicine_id']) || empty($_GET['medicine_id'])) {
     header("Location: stock.php");
     exit;
 }
 
-// Calculate expiry status
-$expiry_date = new DateTime($stock['expiry_date']);
-$today = new DateTime();
-$days_until_expiry = $today->diff($expiry_date)->days;
-$is_expired = $expiry_date < $today;
-$is_expiring_soon = !$is_expired && $days_until_expiry <= 30;
+$medicine_id = intval($_GET['medicine_id']);
 
-// Calculate batch value
-$batch_value = $stock['quantity'] * $stock['purchase_price'];
+// Get medicine details
+$medicine_query = "SELECT m.*, mg.name as generic_name, c.name as category_name, t.name as type_name
+                   FROM medicines m
+                   LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+                   LEFT JOIN medicine_categories c ON m.category_id = c.id
+                   LEFT JOIN medicine_types t ON m.type_id = t.id
+                   WHERE m.id = ?";
+$medicine_stmt = mysqli_prepare($conn, $medicine_query);
+mysqli_stmt_bind_param($medicine_stmt, 'i', $medicine_id);
+mysqli_stmt_execute($medicine_stmt);
+$medicine_result = mysqli_stmt_get_result($medicine_stmt);
+$medicine = mysqli_fetch_assoc($medicine_result);
+
+if (!$medicine) {
+    header("Location: stock.php");
+    exit;
+}
+
+// Get all stock batches for this medicine (including expired, returned, disposed)
+$batches_query = "SELECT sb.*, s.name as supplier_name,
+                  CASE 
+                      WHEN sb.is_expired = 1 THEN 'Expired'
+                      WHEN sb.is_returned = 1 THEN 'Returned'
+                      WHEN sb.is_disposed = 1 THEN 'Disposed'
+                      WHEN sb.quantity <= 0 THEN 'Out of Stock'
+                      WHEN sb.expiry_date < CURDATE() THEN 'Expired'
+                      WHEN sb.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) THEN 'Near Expiry'
+                      ELSE 'Active'
+                  END as status
+                  FROM stock_batches sb
+                  LEFT JOIN suppliers s ON sb.supplier_id = s.id
+                  WHERE sb.medicine_id = ?
+                  ORDER BY sb.expiry_date ASC";
+$batches_stmt = mysqli_prepare($conn, $batches_query);
+mysqli_stmt_bind_param($batches_stmt, 'i', $medicine_id);
+mysqli_stmt_execute($batches_stmt);
+$batches_result = mysqli_stmt_get_result($batches_stmt);
+
+// Calculate statistics
+$stats_query = "SELECT 
+                  COUNT(*) as total_batches,
+                  SUM(CASE WHEN quantity > 0 AND is_expired = 0 AND is_returned = 0 AND is_disposed = 0 THEN 1 ELSE 0 END) as active_batches,
+                  SUM(CASE WHEN is_expired = 1 THEN 1 ELSE 0 END) as expired_batches,
+                  SUM(CASE WHEN is_returned = 1 THEN 1 ELSE 0 END) as returned_batches,
+                  SUM(CASE WHEN is_disposed = 1 THEN 1 ELSE 0 END) as disposed_batches,
+                  COALESCE(SUM(CASE WHEN quantity > 0 AND is_expired = 0 AND is_returned = 0 AND is_disposed = 0 THEN quantity ELSE 0 END), 0) as active_quantity,
+                  COALESCE(SUM(CASE WHEN quantity > 0 AND is_expired = 0 AND is_returned = 0 AND is_disposed = 0 THEN purchase_price * quantity ELSE 0 END), 0) as total_purchase_value,
+                  COALESCE(SUM(CASE WHEN quantity > 0 AND is_expired = 0 AND is_returned = 0 AND is_disposed = 0 THEN selling_price * quantity ELSE 0 END), 0) as total_selling_value,
+                  COALESCE(SUM(CASE WHEN quantity > 0 AND is_expired = 0 AND is_returned = 0 AND is_disposed = 0 THEN mrp * quantity ELSE 0 END), 0) as total_mrp_value
+                FROM stock_batches
+                WHERE medicine_id = ?";
+$stats_stmt = mysqli_prepare($conn, $stats_query);
+mysqli_stmt_bind_param($stats_stmt, 'i', $medicine_id);
+mysqli_stmt_execute($stats_stmt);
+$stats_result = mysqli_stmt_get_result($stats_stmt);
+$stats = mysqli_fetch_assoc($stats_result);
+
+// Get near expiry batches (expiring in next 30 days)
+$near_expiry_query = "SELECT COUNT(*) as near_expiry_count,
+                             SUM(quantity) as near_expiry_quantity
+                      FROM stock_batches
+                      WHERE medicine_id = ?
+                      AND expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+                      AND quantity > 0
+                      AND is_expired = 0
+                      AND is_returned = 0
+                      AND is_disposed = 0";
+$near_expiry_stmt = mysqli_prepare($conn, $near_expiry_query);
+mysqli_stmt_bind_param($near_expiry_stmt, 'i', $medicine_id);
+mysqli_stmt_execute($near_expiry_stmt);
+$near_expiry_result = mysqli_stmt_get_result($near_expiry_stmt);
+$near_expiry = mysqli_fetch_assoc($near_expiry_result);
 ?>
 
 <!DOCTYPE html>
@@ -45,82 +96,68 @@ $batch_value = $stock['quantity'] * $stock['purchase_price'];
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Stock Batch - MediCare Pharma</title>
+    <title>Stock Details - <?php echo htmlspecialchars($medicine['name']); ?> | MediCare Pharma</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    
     <style>
         :root {
             --primary-yellow: #f59e0b;
             --primary-yellow-light: #fbbf24;
-            --primary-yellow-dark: #d97706;
-            --primary-gray: #6b7280;
-            --primary-gray-light: #9ca3af;
-            --primary-gray-dark: #4b5563;
-            --accent-teal: #14b8a6;
-            --accent-purple: #8b5cf6;
-            --accent-blue: #3b82f6;
             --accent-green: #10b981;
+            --accent-blue: #3b82f6;
             --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
         }
 
         body {
-            background: linear-gradient(135deg, #fef3c7 0%, #f5f5f4 50%, #fef3c7 100%);
+            background: linear-gradient(135deg, #fef3c7 0%, #f5f5f4 100%);
             min-height: 100vh;
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
-        .glass-card:hover {
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
-            transition: all 0.3s ease;
-        }
-
-        .gradient-purple {
-            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
-        }
-
-        .gradient-text {
-            background: linear-gradient(45deg, #f59e0b, #d97706);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .yellow-blob {
-            position: absolute;
-            width: 300px;
-            height: 300px;
+        .gradient-yellow {
             background: linear-gradient(135deg, var(--primary-yellow), var(--primary-yellow-light));
-            border-radius: 50%;
-            filter: blur(40px);
-            opacity: 0.2;
-            z-index: -1;
         }
 
-        .purple-blob {
-            position: absolute;
-            width: 250px;
-            height: 250px;
-            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
-            border-radius: 50%;
-            filter: blur(40px);
-            opacity: 0.15;
-            z-index: -1;
+        .gradient-green {
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+        }
+
+        .gradient-blue {
+            background: linear-gradient(135deg, var(--accent-blue), #1d4ed8);
+        }
+
+        .gradient-red {
+            background: linear-gradient(135deg, var(--accent-red), #dc2626);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(251, 191, 36, 0.1);
+            border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: var(--primary-yellow);
+            border-radius: 10px;
         }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(20px);
             }
-
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -128,93 +165,68 @@ $batch_value = $stock['quantity'] * $stock['purchase_price'];
         }
 
         .animate-fade-in-up {
-            animation: fadeInUp 0.6s ease-out forwards;
+            animation: fadeInUp 0.5s ease-out forwards;
         }
 
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-10px);
-            }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
         }
 
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
-        }
-
-        .info-card {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-            border: 1px solid rgba(139, 92, 246, 0.2);
-            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.1);
+        .status-active {
+            background: #d1fae5;
+            color: #059669;
         }
 
         .status-expired {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
+            background: #fee2e2;
+            color: #dc2626;
         }
 
-        .status-expiring {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
+        .status-near-expiry {
+            background: #fef3c7;
+            color: #d97706;
         }
 
-        .status-good {
-            background: linear-gradient(135deg, #10b981, #059669);
+        .status-returned {
+            background: #e0e7ff;
+            color: #4f46e5;
         }
 
-        .badge-batch {
-            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
+        .status-disposed {
+            background: #f3e8ff;
+            color: #7c3aed;
         }
 
-        .badge-category {
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
-        }
-
-        .badge-type {
-            background: linear-gradient(135deg, #14b8a6, #0d9488);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            display: inline-block;
-        }
-
-        .stock-indicator {
-            width: 100%;
+        .progress-bar {
             height: 8px;
             border-radius: 4px;
-            overflow: hidden;
             background: #e5e7eb;
+            overflow: hidden;
         }
 
-        .stock-fill {
+        .progress-fill {
             height: 100%;
             border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
 
-<body class="min-h-screen overflow-x-hidden">
-
-    <!-- Background Blobs -->
-    <div class="yellow-blob top-20 right-10 animate-float"></div>
-    <div class="purple-blob bottom-20 left-10 animate-float" style="animation-delay: 1s;"></div>
+<body class="min-h-screen">
 
     <!-- Navbar -->
     <?php include "../includes/navbar.php"; ?>
@@ -223,440 +235,458 @@ $batch_value = $stock['quantity'] * $stock['purchase_price'];
         <!-- Sidebar -->
         <?php include "includes/pharmacist_sidebar.php"; ?>
 
-        <!-- Overlay for mobile -->
-        <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 lg:hidden hidden"></div>
-
         <!-- Main Content -->
-        <main class="flex-1 p-6">
+        <main class="flex-1 overflow-hidden">
             <!-- Page Header -->
-            <div class="glass-card rounded-2xl p-6 mb-6 animate-fade-in-up">
+            <div class="glass-card mx-6 mt-6 rounded-2xl p-6 animate-fade-in-up">
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between">
                     <div>
-                        <h1 class="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
-                            Stock Batch <span class="gradient-text">Details</span>
-                        </h1>
-                        <p class="text-gray-600 flex items-center space-x-2">
-                            <i class="fas fa-eye text-purple-500"></i>
-                            <span>View detailed information about stock batch</span>
-                            <span class="text-gray-400 mx-2">•</span>
-                            <i class="fas fa-user-md text-blue-500"></i>
-                            <span><?php echo ucfirst($_SESSION['role']); ?> Access</span>
-                            <span class="text-gray-400 mx-2">•</span>
-                            <span class="badge-batch">
-                                <i class="fas fa-hashtag mr-1 text-xs"></i>
-                                <?php echo htmlspecialchars($stock['batch_no']); ?>
-                            </span>
-                        </p>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <a href="stock.php" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-arrow-left"></i>
+                            </a>
+                            <h1 class="text-3xl font-bold text-gray-800">
+                                Stock <span class="text-blue-600">Details</span>
+                            </h1>
+                        </div>
+                        
+                        <!-- Medicine Info -->
+                        <div class="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl border border-blue-200">
+                            <div class="flex flex-col lg:flex-row lg:items-start space-y-4 lg:space-y-0 lg:space-x-6">
+                                <!-- Medicine Details -->
+                                <div class="flex-1">
+                                    <div class="flex items-start space-x-4">
+                                        <div class="w-16 h-16 rounded-xl gradient-blue flex items-center justify-center text-white font-bold shadow-lg">
+                                            <i class="fas fa-capsules text-2xl"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <h2 class="text-2xl font-bold text-gray-800 mb-1">
+                                                <?php echo htmlspecialchars($medicine['name']); ?>
+                                            </h2>
+                                            <div class="flex flex-wrap gap-2 mb-3">
+                                                <?php if (!empty($medicine['generic_name'])): ?>
+                                                    <span class="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">
+                                                        <i class="fas fa-dna mr-1"></i>
+                                                        <?php echo htmlspecialchars($medicine['generic_name']); ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($medicine['category_name'])): ?>
+                                                    <span class="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
+                                                        <i class="fas fa-tag mr-1"></i>
+                                                        <?php echo htmlspecialchars($medicine['category_name']); ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($medicine['type_name'])): ?>
+                                                    <span class="px-3 py-1 bg-purple-100 text-purple-700 text-sm rounded-full">
+                                                        <i class="fas fa-pills mr-1"></i>
+                                                        <?php echo htmlspecialchars($medicine['type_name']); ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                            <?php if (!empty($medicine['description'])): ?>
+                                                <p class="text-gray-600 text-sm mb-2">
+                                                    <?php echo htmlspecialchars($medicine['description']); ?>
+                                                </p>
+                                            <?php endif; ?>
+                                            <div class="text-sm text-gray-600">
+                                                <span class="font-medium">Medicine ID:</span>
+                                                <span class="ml-2 px-2 py-1 bg-gray-200 text-gray-700 rounded font-mono">
+                                                    MED-<?php echo str_pad($medicine['id'], 6, '0', STR_PAD_LEFT); ?>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Stock Summary -->
+                                <div class="lg:w-1/3">
+                                    <div class="bg-white p-4 rounded-xl shadow-sm border">
+                                        <h4 class="font-bold text-gray-800 mb-3">Stock Summary</h4>
+                                        <div class="space-y-3">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-sm text-gray-600">Active Stock:</span>
+                                                <span class="font-bold text-lg text-green-600">
+                                                    <?php echo number_format($stats['active_quantity']); ?> units
+                                                </span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-sm text-gray-600">Active Batches:</span>
+                                                <span class="font-bold text-blue-600">
+                                                    <?php echo $stats['active_batches']; ?>
+                                                </span>
+                                            </div>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-sm text-gray-600">Total Batches:</span>
+                                                <span class="font-bold text-gray-800">
+                                                    <?php echo $stats['total_batches']; ?>
+                                                </span>
+                                            </div>
+                                            <?php if ($near_expiry['near_expiry_count'] > 0): ?>
+                                                <div class="flex justify-between items-center pt-2 border-t">
+                                                    <span class="text-sm text-yellow-600 font-medium">Near Expiry:</span>
+                                                    <span class="font-bold text-yellow-600">
+                                                        <?php echo $near_expiry['near_expiry_quantity']; ?> units
+                                                    </span>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mt-4 lg:mt-0 flex space-x-3">
+                </div>
+            </div>
+
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mx-6 my-6">
+                <!-- Active Stock Value -->
+                <div class="glass-card p-5 rounded-2xl stat-card animate-fade-in-up" style="animation-delay: 0.1s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Active Stock Value</p>
+                            <h3 class="text-2xl font-bold text-green-600">
+                                Rs<?php echo number_format($stats['total_selling_value'], 2); ?>
+                            </h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                            <i class="fas fa-rupee-sign text-green-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-xs text-gray-500">
+                        <span>Purchase: Rs<?php echo number_format($stats['total_purchase_value'], 2); ?></span>
+                        <span class="mx-2">•</span>
+                        <span>MRP: Rs<?php echo number_format($stats['total_mrp_value'], 2); ?></span>
+                    </div>
+                </div>
+
+                <!-- Batch Status -->
+                <div class="glass-card p-5 rounded-2xl stat-card animate-fade-in-up" style="animation-delay: 0.2s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Batch Status</p>
+                            <h3 class="text-2xl font-bold text-blue-600">
+                                <?php echo $stats['active_batches']; ?>/<?php echo $stats['total_batches']; ?>
+                            </h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                            <i class="fas fa-boxes text-blue-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="flex space-x-2">
+                            <?php if ($stats['expired_batches'] > 0): ?>
+                                <span class="status-badge status-expired">
+                                    <?php echo $stats['expired_batches']; ?> Expired
+                                </span>
+                            <?php endif; ?>
+                            <?php if ($stats['returned_batches'] > 0): ?>
+                                <span class="status-badge status-returned">
+                                    <?php echo $stats['returned_batches']; ?> Returned
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock Health -->
+                <div class="glass-card p-5 rounded-2xl stat-card animate-fade-in-up" style="animation-delay: 0.3s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Stock Health</p>
+                            <h3 class="text-2xl font-bold <?php echo $stats['active_quantity'] == 0 ? 'text-red-600' : 'text-green-600'; ?>">
+                                <?php echo $stats['active_quantity'] == 0 ? 'Out of Stock' : 'Healthy'; ?>
+                            </h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full <?php echo $stats['active_quantity'] == 0 ? 'bg-red-100' : 'bg-green-100'; ?> flex items-center justify-center">
+                            <i class="fas fa-heartbeat <?php echo $stats['active_quantity'] == 0 ? 'text-red-600' : 'text-green-600'; ?> text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <?php if ($near_expiry['near_expiry_count'] > 0): ?>
+                            <div class="text-sm text-yellow-600 font-medium">
+                                <i class="fas fa-exclamation-triangle mr-1"></i>
+                                <?php echo $near_expiry['near_expiry_count']; ?> batches near expiry
+                            </div>
+                        <?php else: ?>
+                            <div class="text-sm text-green-600">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                All batches healthy
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="glass-card p-5 rounded-2xl stat-card animate-fade-in-up" style="animation-delay: 0.4s">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500 mb-1">Quick Actions</p>
+                            <h3 class="text-lg font-bold text-gray-800">Manage Stock</h3>
+                        </div>
+                        <div class="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                            <i class="fas fa-cogs text-yellow-600 text-xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex space-x-2">
+                        <?php if ($_SESSION['role'] === 'pharmacist'): ?>
+                            <a href="edit_stock.php?medicine_id=<?php echo $medicine_id; ?>"
+                                class="flex-1 text-center px-3 py-2 bg-yellow-50 text-yellow-700 text-sm rounded-lg hover:bg-yellow-100 transition">
+                                Edit
+                            </a>
+                        <?php endif; ?>
+                        <a href="add_stock.php?medicine_id=<?php echo $medicine_id; ?>"
+                            class="flex-1 text-center px-3 py-2 bg-green-50 text-green-700 text-sm rounded-lg hover:bg-green-100 transition">
+                            Add Batch
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Batch Details Table -->
+            <div class="glass-card mx-6 mb-6 rounded-2xl overflow-hidden animate-fade-in-up" style="animation-delay: 0.5s">
+                <!-- Table Header -->
+                <div class="px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <h3 class="text-xl font-bold text-gray-800">
+                            <i class="fas fa-boxes text-blue-500 mr-2"></i>
+                            Stock Batches Details
+                        </h3>
+                        <div class="flex items-center space-x-4">
+                            <div class="text-sm text-gray-600">
+                                Showing <?php echo mysqli_num_rows($batches_result); ?> batches
+                            </div>
+                            <button onclick="printStockReport()"
+                                class="px-4 py-2 border border-blue-200 text-blue-600 rounded-lg hover:bg-blue-50 transition text-sm font-medium">
+                                <i class="fas fa-print mr-1"></i> Print
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <?php if (mysqli_num_rows($batches_result) > 0): ?>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Batch Details
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Stock Info
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Pricing (Rs)
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Dates
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                                <?php mysqli_data_seek($batches_result, 0); ?>
+                                <?php while ($batch = mysqli_fetch_assoc($batches_result)): 
+                                    $is_expired = $batch['is_expired'] == 1 || strtotime($batch['expiry_date']) < time();
+                                    $is_near_expiry = !$is_expired && strtotime($batch['expiry_date']) < strtotime('+30 days');
+                                ?>
+                                    <tr class="hover:bg-gray-50 transition-colors">
+                                        <!-- Batch Details -->
+                                        <td class="px-4 py-4">
+                                            <div class="space-y-2">
+                                                <div class="font-mono font-bold text-gray-800 text-sm">
+                                                    <?php echo htmlspecialchars($batch['batch_no']); ?>
+                                                </div>
+                                                <div class="text-xs text-gray-500">
+                                                    <?php if (!empty($batch['supplier_name'])): ?>
+                                                        <div class="flex items-center">
+                                                            <i class="fas fa-truck mr-1"></i>
+                                                            <?php echo htmlspecialchars($batch['supplier_name']); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($batch['location'])): ?>
+                                                        <div class="flex items-center mt-1">
+                                                            <i class="fas fa-map-marker-alt mr-1"></i>
+                                                            <?php echo htmlspecialchars($batch['location']); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="text-xs text-gray-400">
+                                                    Batch ID: <?php echo $batch['id']; ?>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <!-- Stock Info -->
+                                        <td class="px-4 py-4">
+                                            <div class="space-y-2">
+                                                <div class="font-bold text-lg <?php echo $batch['quantity'] > 0 ? 'text-gray-800' : 'text-red-600'; ?>">
+                                                    <?php echo number_format($batch['quantity']); ?> units
+                                                </div>
+                                                <div class="text-sm text-gray-600">
+                                                    <div class="flex justify-between">
+                                                        <span>Units/Packet:</span>
+                                                        <span class="font-medium"><?php echo $batch['units_per_packet']; ?></span>
+                                                    </div>
+                                                    <div class="flex justify-between">
+                                                        <span>Packets/Box:</span>
+                                                        <span class="font-medium"><?php echo $batch['packets_per_box']; ?></span>
+                                                    </div>
+                                                </div>
+                                                <?php if ($batch['quantity'] > 0): ?>
+                                                    <div class="text-xs text-gray-500">
+                                                        Total: <?php echo number_format($batch['quantity'] * $batch['units_per_packet'] * $batch['packets_per_box']); ?> individual units
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+
+                                        <!-- Pricing -->
+                                        <td class="px-4 py-4">
+                                            <div class="space-y-1">
+                                                <div class="flex justify-between text-sm">
+                                                    <span class="text-gray-500">Purchase:</span>
+                                                    <span class="font-medium">Rs<?php echo number_format($batch['purchase_price'], 2); ?></span>
+                                                </div>
+                                                <div class="flex justify-between text-sm">
+                                                    <span class="text-gray-500">Selling:</span>
+                                                    <span class="font-medium text-green-600">Rs<?php echo number_format($batch['selling_price'], 2); ?></span>
+                                                </div>
+                                                <div class="flex justify-between text-sm">
+                                                    <span class="text-gray-500">MRP:</span>
+                                                    <span class="font-medium text-blue-600">Rs<?php echo number_format($batch['mrp'], 2); ?></span>
+                                                </div>
+                                                <?php if ($batch['quantity'] > 0): ?>
+                                                    <div class="pt-2 border-t text-xs">
+                                                        <div class="flex justify-between">
+                                                            <span>Total Value:</span>
+                                                            <span class="font-bold">
+                                                                Rs<?php echo number_format($batch['quantity'] * $batch['selling_price'], 2); ?>
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+
+                                        <!-- Dates -->
+                                        <td class="px-4 py-4">
+                                            <div class="space-y-2">
+                                                <div>
+                                                    <div class="text-xs text-gray-500">Received:</div>
+                                                    <div class="text-sm font-medium">
+                                                        <?php echo date('d/m/Y', strtotime($batch['received_date'])); ?>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <div class="text-xs text-gray-500">Expiry:</div>
+                                                    <div class="text-sm font-medium <?php echo $is_expired ? 'text-red-600' : ($is_near_expiry ? 'text-yellow-600' : 'text-green-600'); ?>">
+                                                        <?php echo date('d/m/Y', strtotime($batch['expiry_date'])); ?>
+                                                    </div>
+                                                </div>
+                                                <?php if ($batch['updated_at']): ?>
+                                                    <div class="text-xs text-gray-400">
+                                                        Updated: <?php echo date('d/m/Y H:i', strtotime($batch['updated_at'])); ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+
+                                        <!-- Status -->
+                                        <td class="px-4 py-4">
+                                            <?php
+                                            $status_class = 'status-active';
+                                            $status_text = $batch['status'];
+                                            
+                                            if ($batch['is_expired'] == 1 || $is_expired) {
+                                                $status_class = 'status-expired';
+                                                $status_text = 'Expired';
+                                            } elseif ($batch['is_returned'] == 1) {
+                                                $status_class = 'status-returned';
+                                                $status_text = 'Returned';
+                                            } elseif ($batch['is_disposed'] == 1) {
+                                                $status_class = 'status-disposed';
+                                                $status_text = 'Disposed';
+                                            } elseif ($is_near_expiry) {
+                                                $status_class = 'status-near-expiry';
+                                                $status_text = 'Near Expiry';
+                                            } elseif ($batch['quantity'] <= 0) {
+                                                $status_class = 'status-expired';
+                                                $status_text = 'Out of Stock';
+                                            }
+                                            ?>
+                                            <span class="status-badge <?php echo $status_class; ?>">
+                                                <?php echo $status_text; ?>
+                                            </span>
+                                            
+                                            <?php if ($batch['is_returned'] == 1 && $batch['returned_at']): ?>
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    <?php echo date('d/m/Y', strtotime($batch['returned_at'])); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            
+                                            <?php if ($batch['is_disposed'] == 1 && $batch['disposed_at']): ?>
+                                                <div class="text-xs text-gray-500 mt-1">
+                                                    Disposed: <?php echo date('d/m/Y', strtotime($batch['disposed_at'])); ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php else: ?>
+                    <div class="text-center py-12">
+                        <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <i class="fas fa-box-open text-gray-400 text-2xl"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-2">No Stock Batches Found</h4>
+                        <p class="text-gray-600 mb-6">No stock batches have been added for this medicine yet.</p>
+                        <a href="add_stock.php?medicine_id=<?php echo $medicine_id; ?>"
+                            class="gradient-yellow text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all duration-200 inline-flex items-center space-x-2">
+                            <i class="fas fa-plus"></i>
+                            <span>Add First Batch</span>
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Footer Actions -->
+            <div class="glass-card mx-6 mb-6 p-6 rounded-2xl animate-fade-in-up" style="animation-delay: 0.6s">
+                <div class="flex flex-wrap gap-4 justify-between">
+                    <div class="flex flex-wrap gap-3">
                         <a href="stock.php"
-                            class="px-6 py-3 border border-purple-200 text-gray-700 rounded-xl hover:bg-purple-50 transition font-bold flex items-center space-x-2 shadow-sm">
-                            <i class="fas fa-arrow-left text-purple-500"></i>
+                            class="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition font-bold flex items-center space-x-2">
+                            <i class="fas fa-arrow-left"></i>
                             <span>Back to Stock</span>
                         </a>
-                        <a href="edit_stock.php?id=<?php echo $id; ?>"
-                            class="gradient-purple text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
-                            <i class="fas fa-edit"></i>
-                            <span>Edit Batch</span>
-                            <i class="fas fa-arrow-right text-purple-100 text-sm"></i>
+                        <a href="add_stock.php?medicine_id=<?php echo $medicine_id; ?>"
+                            class="gradient-green text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all duration-200 flex items-center space-x-2">
+                            <i class="fas fa-plus"></i>
+                            <span>Add New Batch</span>
                         </a>
                     </div>
-                </div>
-            </div>
-
-            <!-- Main Content Grid -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Left Column - Medicine & Batch Info -->
-                <div class="lg:col-span-2 space-y-6">
-                    <!-- Medicine Information Card -->
-                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.1s">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fas fa-pills text-blue-500"></i>
-                            <span>Medicine Information</span>
-                        </h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div class="space-y-4">
-                                <div>
-                                    <p class="text-sm text-gray-600 mb-1">Medicine Name</p>
-                                    <p class="text-xl font-bold text-gray-800"><?php echo htmlspecialchars($stock['medicine_name']); ?></p>
-                                    <?php if (!empty($stock['generic_name'])): ?>
-                                        <p class="text-sm text-gray-500"><?php echo htmlspecialchars($stock['generic_name']); ?></p>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="flex flex-wrap gap-2">
-                                    <?php if (!empty($stock['category_name'])): ?>
-                                        <span class="badge-category">
-                                            <i class="fas fa-tag mr-1 text-xs"></i>
-                                            <?php echo htmlspecialchars($stock['category_name']); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                    <?php if (!empty($stock['type_name'])): ?>
-                                        <span class="badge-type">
-                                            <i class="fas fa-prescription-bottle mr-1 text-xs"></i>
-                                            <?php echo htmlspecialchars($stock['type_name']); ?>
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <div class="space-y-4">
-                                <div>
-                                    <p class="text-sm text-gray-600 mb-1">Batch Details</p>
-                                    <div class="space-y-2">
-                                        <div class="flex items-center space-x-2">
-                                            <span class="badge-batch">
-                                                <i class="fas fa-hashtag mr-1 text-xs"></i>
-                                                <?php echo htmlspecialchars($stock['batch_no']); ?>
-                                            </span>
-                                            <span class="text-xs text-gray-500">Batch ID: #<?php echo str_pad($stock['id'], 6, '0', STR_PAD_LEFT); ?></span>
-                                        </div>
-                                        <div class="text-sm text-gray-600">
-                                            <i class="fas fa-map-marker-alt mr-1"></i>
-                                            Location: <?php echo htmlspecialchars($stock['location'] ?: 'Main Store'); ?>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <?php if (!empty($stock['supplier_name'])): ?>
-                                    <div>
-                                        <p class="text-sm text-gray-600 mb-1">Supplier</p>
-                                        <p class="font-medium text-gray-800"><?php echo htmlspecialchars($stock['supplier_name']); ?></p>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Stock Status Card -->
-                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.2s">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fas fa-boxes text-green-500"></i>
-                            <span>Stock Status</span>
-                        </h3>
-                        <div class="space-y-6">
-                            <!-- Quantity & Stock Level -->
-                            <div>
-                                <div class="flex items-center justify-between mb-3">
-                                    <div>
-                                        <p class="text-sm text-gray-600">Current Quantity</p>
-                                        <p class="text-2xl font-bold <?php echo $stock['quantity'] <= 50 ? 'text-red-600' : ($stock['quantity'] <= 100 ? 'text-yellow-600' : 'text-green-600'); ?>">
-                                            <?php echo number_format($stock['quantity']); ?> units
-                                        </p>
-                                    </div>
-                                    <span class="px-3 py-1 rounded-full text-sm font-medium 
-                                        <?php echo $stock['quantity'] <= 50 ? 'bg-red-100 text-red-800' : ($stock['quantity'] <= 100 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'); ?>">
-                                        <?php echo $stock['quantity'] <= 50 ? 'Low Stock' : ($stock['quantity'] <= 100 ? 'Medium Stock' : 'Good Stock'); ?>
-                                    </span>
-                                </div>
-                                <div class="stock-indicator">
-                                    <div class="stock-fill <?php echo $stock['quantity'] <= 50 ? 'status-expired' : ($stock['quantity'] <= 100 ? 'status-expiring' : 'status-good'); ?>"
-                                        style="width: <?php echo min(100, ($stock['quantity'] / 200) * 100); ?>%;"></div>
-                                </div>
-                                <div class="flex justify-between text-xs text-gray-500 mt-1">
-                                    <span>0</span>
-                                    <span>Stock Level</span>
-                                    <span>200+</span>
-                                </div>
-                            </div>
-
-                            <!-- Expiry Information -->
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="info-card rounded-xl p-4">
-                                    <p class="text-sm text-gray-600 mb-1">Expiry Date</p>
-                                    <p class="text-lg font-bold <?php echo $is_expired ? 'text-red-600' : ($is_expiring_soon ? 'text-yellow-600' : 'text-gray-800'); ?>">
-                                        <?php echo date('M d, Y', strtotime($stock['expiry_date'])); ?>
-                                    </p>
-                                    <p class="text-xs <?php echo $is_expired ? 'text-red-500' : ($is_expiring_soon ? 'text-yellow-500' : 'text-gray-500'); ?>">
-                                        <?php if ($is_expired): ?>
-                                            <i class="fas fa-exclamation-triangle mr-1"></i>Expired <?php echo abs($days_until_expiry); ?> days ago
-                                        <?php elseif ($is_expiring_soon): ?>
-                                            <i class="fas fa-clock mr-1"></i>Expiring in <?php echo $days_until_expiry; ?> days
-                                        <?php else: ?>
-                                            <i class="fas fa-check-circle mr-1"></i>Valid for <?php echo $days_until_expiry; ?> more days
-                                        <?php endif; ?>
-                                    </p>
-                                </div>
-
-                                <div class="info-card rounded-xl p-4">
-                                    <p class="text-sm text-gray-600 mb-1">Received Date</p>
-                                    <p class="text-lg font-bold text-gray-800">
-                                        <?php echo date('M d, Y', strtotime($stock['received_date'])); ?>
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        <i class="fas fa-calendar-plus mr-1"></i>
-                                        <?php
-                                        $received_date = new DateTime($stock['received_date']);
-                                        $days_since_received = $today->diff($received_date)->days;
-                                        echo $days_since_received . ' days in inventory';
-                                        ?>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Right Column - Price Information & Actions -->
-                <div class="space-y-6">
-                    <!-- Price Information Card -->
-                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.3s">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fas fa-tag text-yellow-500"></i>
-                            <span>Price Information</span>
-                        </h3>
-                        <div class="space-y-4">
-                            <div class="info-card rounded-xl p-4">
-                                <p class="text-sm text-gray-600 mb-1">Purchase Price</p>
-                                <p class="text-2xl font-bold text-blue-600">Rs <?php echo number_format($stock['purchase_price'], 2); ?></p>
-                                <p class="text-xs text-gray-500">Cost per unit</p>
-                            </div>
-
-                            <div class="info-card rounded-xl p-4">
-                                <p class="text-sm text-gray-600 mb-1">Selling Price</p>
-                                <p class="text-2xl font-bold text-green-600">Rs <?php echo number_format($stock['selling_price'], 2); ?></p>
-                                <p class="text-xs text-gray-500">Selling price per unit</p>
-                            </div>
-
-                            <div class="info-card rounded-xl p-4">
-                                <p class="text-sm text-gray-600 mb-1">MRP</p>
-                                <p class="text-2xl font-bold text-purple-600">Rs <?php echo number_format($stock['mrp'], 2); ?></p>
-                                <p class="text-xs text-gray-500">Maximum retail price</p>
-                            </div>
-
-                            <div class="info-card rounded-xl p-4 bg-gradient-to-r from-green-50 to-green-25 border border-green-200">
-                                <p class="text-sm text-gray-600 mb-1">Batch Value</p>
-                                <p class="text-2xl font-bold text-green-600">Rs <?php echo number_format($batch_value, 2); ?></p>
-                                <p class="text-xs text-gray-500">Total value (Quantity × Purchase Price)</p>
-                            </div>
-
-                            <!-- Profit Margin -->
-                            <div class="info-card rounded-xl p-4 bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200">
-                                <p class="text-sm text-gray-600 mb-1">Profit Margin</p>
-                                <?php
-                                $profit_per_unit = $stock['selling_price'] - $stock['purchase_price'];
-                                $margin_percentage = $stock['purchase_price'] > 0 ? ($profit_per_unit / $stock['purchase_price'] * 100) : 0;
-                                $margin_class = $margin_percentage >= 20 ? 'text-green-600' : ($margin_percentage >= 10 ? 'text-yellow-600' : 'text-red-600');
-                                ?>
-                                <p class="text-2xl font-bold <?php echo $margin_class; ?>"><?php echo number_format($margin_percentage, 1); ?>%</p>
-                                <div class="flex justify-between text-xs text-gray-500">
-                                    <span>Profit/Unit: Rs <?php echo number_format($profit_per_unit, 2); ?></span>
-                                    <span>Total: Rs <?php echo number_format($profit_per_unit * $stock['quantity'], 2); ?></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Quick Actions Card -->
-                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.4s">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                            <i class="fas fa-bolt text-red-500"></i>
-                            <span>Quick Actions</span>
-                        </h3>
-                        <div class="space-y-3">
-                            <a href="edit_stock.php?id=<?php echo $id; ?>"
-                                class="w-full flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-sm">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                                        <i class="fas fa-edit text-blue-600"></i>
-                                    </div>
-                                    <span class="font-medium text-gray-700">Edit Batch</span>
-                                </div>
-                                <i class="fas fa-chevron-right text-blue-400"></i>
+                    <div class="flex flex-wrap gap-3">
+                        <?php if ($_SESSION['role'] === 'pharmacist'): ?>
+                            <a href="edit_stock.php?medicine_id=<?php echo $medicine_id; ?>"
+                                class="gradient-yellow text-white px-6 py-3 rounded-xl font-bold hover:shadow-lg transition-all duration-200 flex items-center space-x-2">
+                                <i class="fas fa-edit"></i>
+                                <span>Edit Stock</span>
                             </a>
-
-                            <button onclick="adjustStock(<?php echo $id; ?>, '<?php echo addslashes($stock['medicine_name']); ?>')"
-                                class="w-full flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 transition shadow-sm">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                                        <i class="fas fa-exchange-alt text-green-600"></i>
-                                    </div>
-                                    <span class="font-medium text-gray-700">Adjust Stock</span>
-                                </div>
-                                <i class="fas fa-chevron-right text-green-400"></i>
-                            </button>
-
-                            <a href="medicines.php?id=<?php echo $stock['medicine_id']; ?>"
-                                class="w-full flex items-center justify-between p-3 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition shadow-sm">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                                        <i class="fas fa-pills text-purple-600"></i>
-                                    </div>
-                                    <span class="font-medium text-gray-700">View Medicine</span>
-                                </div>
-                                <i class="fas fa-chevron-right text-purple-400"></i>
-                            </a>
-
-                            <button onclick="showDeleteModal(<?php echo $id; ?>, '<?php echo addslashes($stock['medicine_name'] . ' - Batch: ' . $stock['batch_no']); ?>')"
-                                class="w-full flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition shadow-sm">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                                        <i class="fas fa-trash-alt text-red-600"></i>
-                                    </div>
-                                    <span class="font-medium text-gray-700">Delete Batch</span>
-                                </div>
-                                <i class="fas fa-chevron-right text-red-400"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Additional Information -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-                <!-- Batch History -->
-                <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.5s">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <i class="fas fa-history text-gray-500"></i>
-                        <span>Batch Information</span>
-                    </h3>
-                    <div class="space-y-3">
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-600">Batch ID</span>
-                            <span class="font-medium text-gray-800">#<?php echo str_pad($stock['id'], 6, '0', STR_PAD_LEFT); ?></span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-600">Stock Status</span>
-                            <span class="<?php echo $stock['is_expired'] ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'; ?> px-3 py-1 rounded-full text-xs font-medium">
-                                <?php echo $stock['is_expired'] ? 'Marked as Expired' : 'Active'; ?>
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                            <span class="text-sm text-gray-600">Last Updated</span>
-                            <span class="font-medium text-gray-800"><?php echo date('M d, Y H:i', strtotime($stock['received_date'])); ?></span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stock Alerts -->
-                <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.6s">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <i class="fas fa-bell text-yellow-500"></i>
-                        <span>Stock Alerts</span>
-                    </h3>
-                    <div class="space-y-3">
-                        <?php if ($is_expired): ?>
-                            <div class="flex items-center space-x-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                                    <i class="fas fa-exclamation-triangle text-red-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-medium text-red-800">Expired Stock</p>
-                                    <p class="text-xs text-red-600">This batch has expired and should not be sold</p>
-                                </div>
-                            </div>
-                        <?php elseif ($is_expiring_soon): ?>
-                            <div class="flex items-center space-x-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                                <div class="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
-                                    <i class="fas fa-clock text-yellow-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-medium text-yellow-800">Expiring Soon</p>
-                                    <p class="text-xs text-yellow-600">This batch expires in <?php echo $days_until_expiry; ?> days</p>
-                                </div>
-                            </div>
                         <?php endif; ?>
-
-                        <?php if ($stock['quantity'] <= 50): ?>
-                            <div class="flex items-center space-x-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                                <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center">
-                                    <i class="fas fa-exclamation text-red-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-medium text-red-800">Low Stock</p>
-                                    <p class="text-xs text-red-600">Consider restocking this medicine</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
-
-                        <?php if (!$is_expired && !$is_expiring_soon && $stock['quantity'] > 50): ?>
-                            <div class="flex items-center space-x-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                                    <i class="fas fa-check text-green-600"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-medium text-green-800">Stock Status: Good</p>
-                                    <p class="text-xs text-green-600">No active alerts for this batch</p>
-                                </div>
-                            </div>
-                        <?php endif; ?>
+                        <button onclick="exportStockDetails()"
+                            class="px-6 py-3 border-2 border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 transition font-bold flex items-center space-x-2">
+                            <i class="fas fa-download"></i>
+                            <span>Export Data</span>
+                        </button>
                     </div>
                 </div>
             </div>
         </main>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all animate-fade-in-up">
-            <div class="p-6">
-                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow">
-                    <i class="fas fa-exclamation-triangle text-red-600 text-2xl"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 text-center mb-2">Delete Stock Batch</h3>
-                <p class="text-gray-600 text-center mb-6">
-                    Are you sure you want to delete <span id="deleteBatchName" class="font-semibold text-purple-600"></span>?
-                    This will remove the stock batch and its quantity from inventory. This action cannot be undone.
-                </p>
-                <div class="flex space-x-3">
-                    <button onclick="hideDeleteModal()"
-                        class="flex-1 px-4 py-3 border border-purple-200 text-gray-700 rounded-xl hover:bg-purple-50 transition font-medium shadow-sm">
-                        Cancel
-                    </button>
-                    <a id="deleteConfirmLink"
-                        href="delete_stock.php?id=<?php echo $id; ?>"
-                        class="flex-1 px-4 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:shadow-lg transition text-center font-medium shadow">
-                        Delete Batch
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Adjust Stock Modal -->
-    <div id="adjustModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-fade-in-up">
-            <div class="p-6">
-                <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow">
-                    <i class="fas fa-edit text-yellow-600 text-2xl"></i>
-                </div>
-                <h3 class="text-xl font-bold text-gray-800 text-center mb-2">Adjust Stock</h3>
-                <p class="text-gray-600 text-center mb-4">
-                    Adjust quantity for <span id="adjustMedicineName" class="font-semibold text-purple-600"></span>
-                </p>
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Adjustment Type</label>
-                        <select id="adjustmentType" class="w-full px-4 py-3 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-200 focus:border-yellow-500 focus:outline-none transition">
-                            <option value="add">Add Stock</option>
-                            <option value="remove">Remove Stock</option>
-                            <option value="set">Set New Quantity</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Quantity</label>
-                        <input type="number" id="adjustQuantity" min="1" value="1"
-                            class="w-full px-4 py-3 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-200 focus:border-yellow-500 focus:outline-none transition">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Reason (Optional)</label>
-                        <textarea id="adjustReason" rows="2"
-                            class="w-full px-4 py-3 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-200 focus:border-yellow-500 focus:outline-none transition"
-                            placeholder="e.g., Damaged goods, recount, etc."></textarea>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button onclick="hideAdjustModal()"
-                            class="flex-1 px-4 py-3 border border-yellow-200 text-gray-700 rounded-xl hover:bg-yellow-50 transition font-medium shadow-sm">
-                            Cancel
-                        </button>
-                        <button onclick="submitAdjustment()"
-                            class="flex-1 px-4 py-3 bg-gradient-to-r from-yellow-600 to-yellow-700 text-white rounded-xl hover:shadow-lg transition font-medium shadow">
-                            Apply Adjustment
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Footer -->
@@ -680,61 +710,70 @@ $batch_value = $stock['quantity'] * $stock['purchase_price'];
             });
         }
 
-        // Delete modal functions
-        function showDeleteModal(id, name) {
-            document.getElementById('deleteModal').classList.remove('hidden');
-            document.getElementById('deleteBatchName').textContent = name;
+        // Print stock report
+        function printStockReport() {
+            const originalContent = document.body.innerHTML;
+            const printContent = document.querySelector('.glass-card.mx-6.mb-6').outerHTML;
+            
+            document.body.innerHTML = `
+                <div style="padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h1 style="color: #1e40af; font-size: 24px;">Stock Batch Report</h1>
+                        <h2 style="color: #374151; font-size: 18px;">
+                            <?php echo htmlspecialchars($medicine['name']); ?>
+                        </h2>
+                        <p style="color: #6b7280; font-size: 14px;">
+                            Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+                        </p>
+                    </div>
+                    ${printContent}
+                </div>
+            `;
+            
+            window.print();
+            document.body.innerHTML = originalContent;
         }
 
-        function hideDeleteModal() {
-            document.getElementById('deleteModal').classList.add('hidden');
+        // Export stock details to CSV
+        function exportStockDetails() {
+            const rows = [];
+            const headers = ['Batch No', 'Quantity', 'Units/Packet', 'Packets/Box', 'Purchase Price', 'Selling Price', 'MRP', 'Received Date', 'Expiry Date', 'Location', 'Supplier', 'Status'];
+            
+            // Get all batch rows
+            document.querySelectorAll('tbody tr').forEach(row => {
+                const batchNo = row.querySelector('.font-mono')?.textContent || '';
+                const quantity = row.querySelector('.font-bold.text-lg')?.textContent.replace(' units', '') || '0';
+                const unitsPerPacket = row.querySelector('.text-sm.text-gray-600 div:nth-child(1) span:nth-child(2)')?.textContent || '0';
+                const packetsPerBox = row.querySelector('.text-sm.text-gray-600 div:nth-child(2) span:nth-child(2)')?.textContent || '0';
+                const purchasePrice = row.querySelector('td:nth-child(3) div:nth-child(1) span:nth-child(2)')?.textContent.replace('Rs', '') || '0';
+                const sellingPrice = row.querySelector('td:nth-child(3) div:nth-child(2) span:nth-child(2)')?.textContent.replace('Rs', '') || '0';
+                const mrp = row.querySelector('td:nth-child(3) div:nth-child(3) span:nth-child(2)')?.textContent.replace('Rs', '') || '0';
+                const receivedDate = row.querySelector('td:nth-child(4) div:nth-child(1) div:nth-child(2)')?.textContent || '';
+                const expiryDate = row.querySelector('td:nth-child(4) div:nth-child(2) div:nth-child(2)')?.textContent || '';
+                const location = row.querySelector('td:nth-child(1) div:nth-child(2) div:nth-child(2)')?.textContent || '';
+                const supplier = row.querySelector('td:nth-child(1) div:nth-child(2) div:nth-child(1)')?.textContent.replace('', '').trim() || '';
+                const status = row.querySelector('.status-badge')?.textContent || '';
+                
+                rows.push([batchNo, quantity, unitsPerPacket, packetsPerBox, purchasePrice, sellingPrice, mrp, receivedDate, expiryDate, location, supplier, status]);
+            });
+            
+            // Create CSV content
+            let csvContent = headers.join(',') + '\n';
+            rows.forEach(row => {
+                csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
+            });
+            
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stock_details_<?php echo $medicine['name']; ?>_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
-
-        // Adjust stock modal functions
-        let currentBatchId = null;
-
-        function adjustStock(id, name) {
-            currentBatchId = id;
-            document.getElementById('adjustModal').classList.remove('hidden');
-            document.getElementById('adjustMedicineName').textContent = name;
-        }
-
-        function hideAdjustModal() {
-            document.getElementById('adjustModal').classList.add('hidden');
-            currentBatchId = null;
-        }
-
-        function submitAdjustment() {
-            const type = document.getElementById('adjustmentType').value;
-            const quantity = document.getElementById('adjustQuantity').value;
-            const reason = document.getElementById('adjustReason').value;
-
-            if (!quantity || quantity <= 0) {
-                alert('Please enter a valid quantity');
-                return;
-            }
-
-            // Submit adjustment (this would typically be an AJAX call)
-            alert(`Adjusting stock for batch ${currentBatchId}: ${type} ${quantity} units`);
-            hideAdjustModal();
-
-            // Reload the page to see changes
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        }
-
-        // Close modals when clicking outside
-        [document.getElementById('deleteModal'), document.getElementById('adjustModal')].forEach(modal => {
-            if (modal) {
-                modal.addEventListener('click', function(e) {
-                    if (e.target === this) {
-                        if (this.id === 'deleteModal') hideDeleteModal();
-                        if (this.id === 'adjustModal') hideAdjustModal();
-                    }
-                });
-            }
-        });
 
         // Initialize animations
         document.addEventListener('DOMContentLoaded', function() {
@@ -743,31 +782,25 @@ $batch_value = $stock['quantity'] * $stock['purchase_price'];
             });
         });
 
-        // Export to PDF function
-        function exportToPDF() {
-            // This function would generate a PDF of the stock batch details
-            alert('PDF export functionality would be implemented here');
-        }
-
-        // Print batch details
-        function printBatch() {
-            window.print();
-        }
-
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
             // Ctrl/Cmd + P to print
             if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
                 e.preventDefault();
-                printBatch();
+                printStockReport();
             }
-
-            // Escape to go back
+            
+            // Ctrl/Cmd + E to export
+            if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+                e.preventDefault();
+                exportStockDetails();
+            }
+            
+            // Esc to go back
             if (e.key === 'Escape') {
                 window.location.href = 'stock.php';
             }
         });
     </script>
 </body>
-
 </html>
