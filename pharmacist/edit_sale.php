@@ -21,14 +21,22 @@ if (!$sale) {
 }
 
 // Get sale items with proper joins
-$items_query = "SELECT si.*, m.name as medicine_name, m.generic_name, 
-                       sb.batch_no, sb.quantity as current_stock,
-                       sb.selling_price
-                FROM sale_items si
-                JOIN medicines m ON si.medicine_id = m.id
-                LEFT JOIN stock_batches sb ON si.batch_id = sb.id
-                WHERE si.sale_id = $sale_id";
+$items_query = "
+    SELECT 
+        si.*,
+        m.name AS medicine_name,
+        mg.name AS generic_name,
+        sb.batch_no,
+        sb.quantity AS current_stock,
+        sb.selling_price
+    FROM sale_items si
+    JOIN medicines m ON si.medicine_id = m.id
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+    LEFT JOIN stock_batches sb ON si.batch_id = sb.id
+    WHERE si.sale_id = $sale_id
+";
 $items_result = mysqli_query($conn, $items_query);
+
 
 $error = '';
 $success = '';
@@ -182,19 +190,16 @@ $medicines_query = "
     SELECT 
         m.id,
         m.name,
-        m.generic_name,
-
+        mg.name AS generic_name,
         COALESCE(SUM(sb.quantity), 0) AS total_stock,
         MIN(sb.selling_price) AS min_price
-
     FROM medicines m
-
+    LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
     LEFT JOIN stock_batches sb 
         ON m.id = sb.medicine_id
-       AND sb.expiry_date >= CURDATE()
-       AND sb.is_expired = 0
-
-    GROUP BY m.id
+        AND sb.expiry_date >= CURDATE()
+        AND sb.is_expired = 0
+    GROUP BY m.id, m.name, mg.name
     HAVING total_stock > 0
     ORDER BY m.name ASC
 ";

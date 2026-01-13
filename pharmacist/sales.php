@@ -335,13 +335,13 @@ $top_medicines = mysqli_query(
                     <div class="mt-4 lg:mt-0 flex space-x-3">
                         <a href="create_sale.php"
                             class="gradient-green text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
-                            <i class="fas fa-plus"></i>
-                            <span>Regular Sale</span>
-                        </a>
-                        <a href="create_sale_wholesale.php"
-                            class="gradient-purple text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
                             <i class="fas fa-users"></i>
                             <span>Wholesale Sale</span>
+                        </a>
+                        <a href="create_regular_sale.php"
+                            class="gradient-purple text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
+                            <i class="fas fa-plus"></i>
+                            <span>Regular Sale</span>
                         </a>
                     </div>
                 </div>

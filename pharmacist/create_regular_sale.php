@@ -367,7 +367,7 @@ $medicines_result = mysqli_query($conn, $medicines_query);
 
                     <!-- Quick Medicine Search -->
                     <div class="mt-4">
-                        <input type="text" id="quickSearch"
+                        <input type="text" id="quickSearch" 
                             placeholder="Quick search medicine by name or generic..."
                             class="w-full form-input px-4 py-3 rounded-lg mb-2">
                         <div id="searchResults" class="hidden bg-white border border-gray-200 rounded-lg max-h-60 overflow-y-auto"></div>
@@ -387,7 +387,7 @@ $medicines_result = mysqli_query($conn, $medicines_query);
                                 <span id="subtotal" class="font-bold text-gray-800">Rs0.00</span>
                             </div>
                         </div>
-
+                        
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Discount:</span>
@@ -432,7 +432,7 @@ $medicines_result = mysqli_query($conn, $medicines_query);
                 </div>
             </div>
             <div class="mt-4">
-                <input type="text" id="manualBarcode"
+                <input type="text" id="manualBarcode" 
                     placeholder="Or enter barcode manually..."
                     class="w-full form-input px-4 py-3 rounded-lg mb-2"
                     onkeypress="if(event.key === 'Enter') addByBarcode()">
@@ -604,14 +604,14 @@ $medicines_result = mysqli_query($conn, $medicines_query);
         document.getElementById('quickSearch').addEventListener('input', function(e) {
             const searchTerm = e.target.value.toLowerCase();
             const resultsDiv = document.getElementById('searchResults');
-
+            
             if (searchTerm.length < 2) {
                 resultsDiv.classList.add('hidden');
                 return;
             }
 
-            const filteredMedicines = medicines.filter(med =>
-                med.name.toLowerCase().includes(searchTerm) ||
+            const filteredMedicines = medicines.filter(med => 
+                med.name.toLowerCase().includes(searchTerm) || 
                 (med.generic && med.generic.toLowerCase().includes(searchTerm))
             );
 
@@ -658,7 +658,7 @@ $medicines_result = mysqli_query($conn, $medicines_query);
             document.getElementById('barcodeScanner').classList.add('scanner-active');
             scannerActive = true;
             document.getElementById('manualBarcode').focus();
-
+            
             // In a real implementation, you would initialize the barcode scanner here
             console.log('Barcode scanner activated');
         }

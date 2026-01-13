@@ -49,7 +49,7 @@ if (isset($_GET['delete_id']) && $is_pharmacist) {
     exit;
 }
 
-// Fetch all payments with related data
+// Fetch all payments with related data - UPDATED QUERY
 $query = "SELECT 
             p.*,
             u.username as created_by_name,
@@ -61,14 +61,31 @@ $query = "SELECT
                 WHEN p.payment_type = 'sale' THEN s.pharmacist_id 
                 WHEN p.payment_type = 'return_to_company' THEN r.returned_by 
             END as original_creator_id,
+            -- Determine source type with regular/wholesale distinction
             CASE 
-                WHEN p.is_auto_generated = 1 AND p.payment_type = 'sale' THEN CONCAT('SALE-', p.reference_id)
-                WHEN p.is_auto_generated = 1 AND p.payment_type = 'return_to_company' THEN CONCAT('RETURN-', p.reference_id)
+                WHEN p.is_auto_generated = 1 AND p.payment_type = 'sale' THEN 
+                    CASE 
+                        WHEN p.auto_generated_from = 'WHOLESALE_SALES' THEN 'WHOLESALE_SALE'
+                        WHEN p.auto_generated_from = 'REGULAR_SALES' THEN 'REGULAR_SALE'
+                        ELSE 'SALE_SYSTEM'
+                    END
+                WHEN p.is_auto_generated = 1 AND p.payment_type = 'return_to_company' THEN 'RETURNS_SYSTEM'
                 ELSE 'MANUAL'
-            END as source_type
+            END as source_type,
+            -- Get customer name to determine regular vs wholesale
+            COALESCE(i.customer_name, 'N/A') as customer_name,
+            -- Determine sale type for display
+            CASE 
+                WHEN p.auto_generated_from = 'WHOLESALE_SALES' THEN 'wholesale'
+                WHEN p.auto_generated_from = 'REGULAR_SALES' THEN 'regular'
+                WHEN p.is_auto_generated = 1 AND p.payment_type = 'sale' AND i.customer_name = 'Regular Customer' THEN 'regular'
+                WHEN p.is_auto_generated = 1 AND p.payment_type = 'sale' AND i.customer_name != 'Regular Customer' THEN 'wholesale'
+                ELSE 'manual'
+            END as sale_type
           FROM payments p
           LEFT JOIN users u ON p.created_by = u.id
           LEFT JOIN sales s ON p.payment_type = 'sale' AND p.reference_id = s.id
+          LEFT JOIN invoices i ON s.id = i.sale_id
           LEFT JOIN returns_to_company r ON p.payment_type = 'return_to_company' AND p.reference_id = r.id
           WHERE 1=1";
 
@@ -82,7 +99,7 @@ $query .= " ORDER BY p.payment_date DESC";
 $result = mysqli_query($conn, $query);
 $total_payments = mysqli_num_rows($result);
 
-// Get statistics
+// Get statistics - UPDATED QUERY
 $stats_query = "SELECT 
     COUNT(*) as total_payments,
     SUM(amount) as total_amount,
@@ -94,7 +111,10 @@ $stats_query = "SELECT
     COUNT(CASE WHEN payment_method = 'Cash' THEN 1 END) as cash_payments,
     COUNT(CASE WHEN payment_method = 'Online' THEN 1 END) as online_payments,
     COUNT(CASE WHEN is_auto_generated = 1 THEN 1 END) as auto_generated_payments,
-    COUNT(CASE WHEN is_auto_generated = 0 THEN 1 END) as manual_payments
+    COUNT(CASE WHEN is_auto_generated = 0 THEN 1 END) as manual_payments,
+    -- Add regular vs wholesale stats
+    COUNT(CASE WHEN auto_generated_from = 'REGULAR_SALES' THEN 1 END) as regular_sales_payments,
+    COUNT(CASE WHEN auto_generated_from = 'WHOLESALE_SALES' THEN 1 END) as wholesale_sales_payments
 FROM payments";
 
 if ($is_pharmacist) {
@@ -104,12 +124,14 @@ if ($is_pharmacist) {
 $stats_result = mysqli_query($conn, $stats_query);
 $stats = mysqli_fetch_assoc($stats_result);
 
-// Get today's payments
+// Get today's payments - UPDATED QUERY
 $today_query = "SELECT 
     COUNT(*) as today_count,
     SUM(amount) as today_amount,
     COUNT(CASE WHEN is_auto_generated = 1 THEN 1 END) as today_auto,
-    COUNT(CASE WHEN is_auto_generated = 0 THEN 1 END) as today_manual
+    COUNT(CASE WHEN is_auto_generated = 0 THEN 1 END) as today_manual,
+    COUNT(CASE WHEN auto_generated_from = 'REGULAR_SALES' THEN 1 END) as today_regular,
+    COUNT(CASE WHEN auto_generated_from = 'WHOLESALE_SALES' THEN 1 END) as today_wholesale
 FROM payments 
 WHERE DATE(payment_date) = CURDATE()";
 
@@ -120,8 +142,13 @@ if ($is_pharmacist) {
 $today_result = mysqli_query($conn, $today_query);
 $today = mysqli_fetch_assoc($today_result);
 
-// Get recent payments
-$recent_query = "SELECT p.*, u.username as created_by_name
+// Get recent payments - UPDATED QUERY
+$recent_query = "SELECT p.*, u.username as created_by_name,
+                CASE 
+                    WHEN p.auto_generated_from = 'WHOLESALE_SALES' THEN 'wholesale'
+                    WHEN p.auto_generated_from = 'REGULAR_SALES' THEN 'regular'
+                    ELSE 'manual'
+                END as sale_type
                 FROM payments p
                 LEFT JOIN users u ON p.created_by = u.id";
 
@@ -132,12 +159,16 @@ if ($is_pharmacist) {
 $recent_query .= " ORDER BY p.payment_date DESC LIMIT 5";
 $recent_payments = mysqli_query($conn, $recent_query);
 
-// Get payment summary by type
+// Get payment summary by type - UPDATED QUERY
 $summary_query = "SELECT 
     payment_type,
     COUNT(*) as count,
     SUM(amount) as total_amount,
-    AVG(amount) as avg_amount
+    AVG(amount) as avg_amount,
+    COUNT(CASE WHEN auto_generated_from = 'REGULAR_SALES' THEN 1 END) as regular_count,
+    COUNT(CASE WHEN auto_generated_from = 'WHOLESALE_SALES' THEN 1 END) as wholesale_count,
+    SUM(CASE WHEN auto_generated_from = 'REGULAR_SALES' THEN amount ELSE 0 END) as regular_amount,
+    SUM(CASE WHEN auto_generated_from = 'WHOLESALE_SALES' THEN amount ELSE 0 END) as wholesale_amount
 FROM payments";
 
 if ($is_pharmacist) {
@@ -374,6 +405,26 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
             display: inline-block;
         }
 
+        .badge-regular {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .badge-wholesale {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -471,8 +522,13 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                     </div>
                     <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($stats['total_amount'] ?: 0, 2); ?></h3>
                     <p class="text-gray-600 mb-3">Total Payments Amount</p>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="gradient-green h-2 rounded-full" style="width: 100%"></div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-green-500">
+                            <i class="fas fa-user mr-1"></i>Regular: <?php echo $stats['regular_sales_payments'] ?: 0; ?>
+                        </span>
+                        <span class="text-purple-500">
+                            <i class="fas fa-users mr-1"></i>Wholesale: <?php echo $stats['wholesale_sales_payments'] ?: 0; ?>
+                        </span>
                     </div>
                 </div>
 
@@ -500,8 +556,8 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                             <i class="fas fa-chart-pie text-white text-xl"></i>
                         </div>
                         <div class="flex flex-col space-y-1 text-right">
-                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">Completed: Rs <?php echo number_format($stats['completed_amount'] ?: 0, 2); ?></span>
-                            <span class="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-1 rounded-full">Pending: Rs <?php echo number_format($stats['pending_amount'] ?: 0, 2); ?></span>
+                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">Regular: <?php echo $today['today_regular'] ?: 0; ?></span>
+                            <span class="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-full">Wholesale: <?php echo $today['today_wholesale'] ?: 0; ?></span>
                         </div>
                     </div>
                     <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($today['today_count'] ?: 0); ?></h3>
@@ -532,64 +588,99 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                 </div>
             </div>
 
-            <!-- Payment Type Summary -->
-            <?php if (!empty($payment_summary)): ?>
+            <!-- Sale Type Breakdown -->
+            <?php if ($stats['sale_payments'] > 0): ?>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mx-6 mb-6">
-                    <?php foreach ($payment_summary as $type => $summary):
-                        $is_sale = $type === 'sale';
-                        $bg_color = $is_sale ? 'from-blue-500/10 to-blue-600/10' : 'from-purple-500/10 to-purple-600/10';
-                        $text_color = $is_sale ? 'text-blue-600' : 'text-purple-600';
-                        $icon = $is_sale ? 'fa-shopping-cart' : 'fa-undo-alt';
-                        $type_name = $is_sale ? 'Sale Payments' : 'Return Payments';
-                    ?>
-                        <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.5s">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-12 h-12 rounded-xl bg-gradient-to-r <?php echo $is_sale ? 'from-blue-500 to-blue-600' : 'from-purple-500 to-purple-600'; ?> flex items-center justify-center shadow-lg">
-                                        <i class="fas <?php echo $icon; ?> text-white text-xl"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-bold text-gray-800"><?php echo $type_name; ?></h3>
-                                        <p class="text-sm text-gray-500">Payment Summary</p>
-                                    </div>
+                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.5s">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-green-600 flex items-center justify-center shadow-lg">
+                                    <i class="fas fa-user text-white text-xl"></i>
                                 </div>
-                                <span class="text-xs font-bold <?php echo $text_color; ?> bg-opacity-20 px-3 py-1 rounded-full">
-                                    <?php echo $summary['count']; ?> payments
+                                <div>
+                                    <h3 class="font-bold text-gray-800">Regular Sales Payments</h3>
+                                    <p class="text-sm text-gray-500">Customer Sales</p>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                                <?php echo $stats['regular_sales_payments'] ?: 0; ?> payments
+                            </span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Total Amount:</span>
+                                <span class="font-bold text-green-600">
+                                    Rs <?php echo isset($payment_summary['sale']['regular_amount']) ? number_format($payment_summary['sale']['regular_amount'], 2) : '0.00'; ?>
                                 </span>
                             </div>
-                            <div class="space-y-3">
-                                <div class="flex items-center justify-between">
-                                    <span class="text-gray-600">Total Amount:</span>
-                                    <span class="font-bold <?php echo $text_color; ?>">
-                                        Rs <?php echo number_format($summary['total_amount'], 2); ?>
-                                    </span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-gray-600">Average Payment:</span>
-                                    <span class="font-bold text-gray-800">
-                                        Rs <?php echo number_format($summary['avg_amount'], 2); ?>
-                                    </span>
-                                </div>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-gray-600">Percentage:</span>
-                                    <span class="font-bold text-green-600">
-                                        <?php echo $stats['total_amount'] > 0 ? number_format(($summary['total_amount'] / $stats['total_amount']) * 100, 1) : 0; ?>%
-                                    </span>
-                                </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Percentage:</span>
+                                <span class="font-bold text-blue-600">
+                                    <?php
+                                    $total_sale_amount = $payment_summary['sale']['total_amount'] ?? 0;
+                                    $regular_amount = $payment_summary['sale']['regular_amount'] ?? 0;
+                                    echo $total_sale_amount > 0 ? number_format(($regular_amount / $total_sale_amount) * 100, 1) : 0; ?>%
+                                </span>
                             </div>
-                            <div class="mt-4 pt-4 border-t border-gray-200">
-                                <div class="w-full bg-gray-200 rounded-full h-2">
-                                    <div class="h-2 rounded-full <?php echo $is_sale ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-purple-500 to-purple-600'; ?>"
-                                        style="width: <?php echo $stats['total_amount'] > 0 ? ($summary['total_amount'] / $stats['total_amount']) * 100 : 0; ?>%"></div>
-                                </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Average Payment:</span>
+                                <span class="font-bold text-gray-800">
+                                    Rs <?php
+                                        $regular_count = $payment_summary['sale']['regular_count'] ?? 0;
+                                        $regular_amount = $payment_summary['sale']['regular_amount'] ?? 0;
+                                        echo $regular_count > 0 ? number_format($regular_amount / $regular_count, 2) : '0.00'; ?>
+                                </span>
                             </div>
                         </div>
-                    <?php endforeach; ?>
+                    </div>
+
+                    <div class="glass-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.6s">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
+                                    <i class="fas fa-users text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-800">Wholesale Sales Payments</h3>
+                                    <p class="text-sm text-gray-500">Bulk Sales</p>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
+                                <?php echo $stats['wholesale_sales_payments'] ?: 0; ?> payments
+                            </span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Total Amount:</span>
+                                <span class="font-bold text-purple-600">
+                                    Rs <?php echo isset($payment_summary['sale']['wholesale_amount']) ? number_format($payment_summary['sale']['wholesale_amount'], 2) : '0.00'; ?>
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Percentage:</span>
+                                <span class="font-bold text-blue-600">
+                                    <?php
+                                    $total_sale_amount = $payment_summary['sale']['total_amount'] ?? 0;
+                                    $wholesale_amount = $payment_summary['sale']['wholesale_amount'] ?? 0;
+                                    echo $total_sale_amount > 0 ? number_format(($wholesale_amount / $total_sale_amount) * 100, 1) : 0; ?>%
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-gray-600">Average Payment:</span>
+                                <span class="font-bold text-gray-800">
+                                    Rs <?php
+                                        $wholesale_count = $payment_summary['sale']['wholesale_count'] ?? 0;
+                                        $wholesale_amount = $payment_summary['sale']['wholesale_amount'] ?? 0;
+                                        echo $wholesale_count > 0 ? number_format($wholesale_amount / $wholesale_count, 2) : '0.00'; ?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             <?php endif; ?>
 
             <!-- Payments Table -->
-            <div class="glass-card mx-6 rounded-2xl overflow-hidden animate-fade-in-up" style="animation-delay: 0.6s">
+            <div class="glass-card mx-6 rounded-2xl overflow-hidden animate-fade-in-up" style="animation-delay: 0.7s">
                 <div class="px-6 py-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-blue-25 flex flex-col md:flex-row md:items-center justify-between">
                     <div class="mb-4 md:mb-0">
                         <h3 class="text-lg font-semibold text-gray-800">All Payments</h3>
@@ -617,6 +708,14 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                             <option value="">All Sources</option>
                             <option value="auto">Auto-generated</option>
                             <option value="manual">Manual</option>
+                        </select>
+
+                        <select id="saleTypeFilter"
+                            class="px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none transition bg-white/80 shadow-sm">
+                            <option value="">All Sale Types</option>
+                            <option value="regular">Regular Sales</option>
+                            <option value="wholesale">Wholesale Sales</option>
+                            <option value="manual">Manual Payments</option>
                         </select>
 
                         <input type="date"
@@ -648,6 +747,7 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                         </thead>
                         <tbody class="divide-y divide-blue-50">
                             <?php if ($total_payments > 0): ?>
+                                <?php mysqli_data_seek($result, 0); ?>
                                 <?php while ($row = mysqli_fetch_assoc($result)):
                                     $payment_date = new DateTime($row['payment_date']);
                                     $created_date = new DateTime($row['created_at']);
@@ -668,6 +768,19 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                     $source_badge = $row['is_auto_generated'] == 1 ? 'badge-auto' : 'badge-manual';
                                     $source_text = $row['is_auto_generated'] == 1 ? 'Auto' : 'Manual';
 
+                                    // Determine sale type badge for auto-generated sale payments
+                                    $sale_type_badge = '';
+                                    $sale_type_text = '';
+                                    if ($row['payment_type'] === 'sale' && $row['is_auto_generated'] == 1) {
+                                        if ($row['sale_type'] === 'regular') {
+                                            $sale_type_badge = 'badge-regular';
+                                            $sale_type_text = 'Regular';
+                                        } elseif ($row['sale_type'] === 'wholesale') {
+                                            $sale_type_badge = 'badge-wholesale';
+                                            $sale_type_text = 'Wholesale';
+                                        }
+                                    }
+
                                     // Check if user can edit/delete this payment
                                     $can_edit = $is_pharmacist &&
                                         ($row['created_by'] == $user_id ||
@@ -679,8 +792,8 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                     <tr class="table-row hover:bg-blue-25 transition-colors">
                                         <td class="px-6 py-4">
                                             <div class="flex items-start space-x-4">
-                                                <div class="w-12 h-12 rounded-xl <?php echo $row['payment_type'] === 'sale' ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-purple-500 to-purple-600'; ?> flex items-center justify-center text-white font-semibold shadow flex-shrink-0">
-                                                    <i class="fas <?php echo $row['payment_type'] === 'sale' ? 'fa-shopping-cart' : 'fa-arrow-left'; ?> text-lg"></i>
+                                                <div class="w-12 h-12 rounded-xl <?php echo $row['payment_type'] === 'sale' ? ($row['sale_type'] === 'wholesale' ? 'bg-gradient-to-r from-purple-500 to-purple-600' : 'bg-gradient-to-r from-green-500 to-green-600') : 'bg-gradient-to-r from-purple-500 to-purple-600'; ?> flex items-center justify-center text-white font-semibold shadow flex-shrink-0">
+                                                    <i class="fas <?php echo $row['payment_type'] === 'sale' ? ($row['sale_type'] === 'wholesale' ? 'fa-users' : 'fa-user') : 'fa-arrow-left'; ?> text-lg"></i>
                                                 </div>
                                                 <div class="flex-1 min-w-0">
                                                     <div class="flex items-center space-x-2 mb-1">
@@ -692,6 +805,12 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                                         <span class="<?php echo $source_badge; ?>">
                                                             <?php echo $source_text; ?>
                                                         </span>
+                                                        <?php if ($sale_type_badge): ?>
+                                                            <span class="<?php echo $sale_type_badge; ?>">
+                                                                <i class="fas <?php echo $sale_type_badge === 'badge-regular' ? 'fa-user' : 'fa-users'; ?> mr-1 text-xs"></i>
+                                                                <?php echo $sale_type_text; ?>
+                                                            </span>
+                                                        <?php endif; ?>
                                                     </div>
                                                     <p class="text-sm text-gray-500 mb-2">
                                                         Invoice: <span class="font-mono text-blue-600"><?php echo htmlspecialchars($row['invoice_no']); ?></span>
@@ -724,6 +843,15 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                                             <i class="fas fa-robot mr-1"></i>Auto-generated
                                                         </span>
                                                     </div>
+                                                    <?php if (!empty($row['auto_generated_from'])): ?>
+                                                        <div class="flex items-center justify-between">
+                                                            <span class="text-sm text-gray-600">Sale Type</span>
+                                                            <span class="text-xs font-bold <?php echo $row['auto_generated_from'] === 'WHOLESALE_SALES' ? 'text-purple-600 bg-purple-50' : 'text-green-600 bg-green-50'; ?> px-2 py-1 rounded-full">
+                                                                <i class="fas <?php echo $row['auto_generated_from'] === 'WHOLESALE_SALES' ? 'fa-users' : 'fa-user'; ?> mr-1"></i>
+                                                                <?php echo $row['auto_generated_from'] === 'WHOLESALE_SALES' ? 'Wholesale' : 'Regular'; ?>
+                                                            </span>
+                                                        </div>
+                                                    <?php endif; ?>
                                                 <?php endif; ?>
                                             </div>
                                         </td>
@@ -731,7 +859,7 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                             <div class="space-y-2">
                                                 <div class="flex items-center justify-between">
                                                     <span class="text-sm text-gray-600">Amount Paid</span>
-                                                    <span class="text-sm font-bold <?php echo $row['payment_type'] === 'sale' ? 'text-green-600' : 'text-purple-600'; ?>">
+                                                    <span class="text-sm font-bold <?php echo $row['payment_type'] === 'sale' ? ($row['sale_type'] === 'wholesale' ? 'text-purple-600' : 'text-green-600') : 'text-purple-600'; ?>">
                                                         Rs <?php echo number_format($row['amount'], 2); ?>
                                                     </span>
                                                 </div>
@@ -865,7 +993,7 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
             </div>
 
             <!-- Recent Payments -->
-            <div class="glass-card mx-6 my-8 rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.7s">
+            <div class="glass-card mx-6 my-8 rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.8s">
                 <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
                     <i class="fas fa-history text-blue-500"></i>
                     <span>Recent Payments</span>
@@ -875,15 +1003,16 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                         <?php mysqli_data_seek($recent_payments, 0); ?>
                         <?php while ($recent = mysqli_fetch_assoc($recent_payments)):
                             $recent_date = new DateTime($recent['payment_date']);
+                            $is_wholesale = $recent['sale_type'] === 'wholesale';
                         ?>
-                            <div class="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 border border-blue-100 hover:border-blue-200 transition">
+                            <div class="bg-gradient-to-r <?php echo $is_wholesale ? 'from-purple-50' : 'from-green-50'; ?> to-white rounded-xl p-4 border <?php echo $is_wholesale ? 'border-purple-100' : 'border-green-100'; ?> hover:<?php echo $is_wholesale ? 'border-purple-200' : 'border-green-200'; ?> transition">
                                 <div class="flex items-start justify-between mb-3">
-                                    <div class="w-10 h-10 rounded-lg <?php echo $recent['payment_type'] === 'sale' ? 'bg-green-100' : 'bg-purple-100'; ?> flex items-center justify-center">
-                                        <i class="fas <?php echo $recent['payment_type'] === 'sale' ? 'fa-shopping-cart text-green-600' : 'fa-arrow-left text-purple-600'; ?>"></i>
+                                    <div class="w-10 h-10 rounded-lg <?php echo $is_wholesale ? 'bg-purple-100' : 'bg-green-100'; ?> flex items-center justify-center">
+                                        <i class="fas <?php echo $is_wholesale ? 'fa-users text-purple-600' : 'fa-user text-green-600'; ?>"></i>
                                     </div>
                                     <div class="flex flex-col items-end space-y-1">
-                                        <span class="text-xs font-bold <?php echo $recent['payment_type'] === 'sale' ? 'text-green-600' : 'text-purple-600'; ?> bg-opacity-20 px-2 py-1 rounded-full">
-                                            <?php echo $recent['payment_type'] === 'sale' ? 'Sale' : 'Return'; ?>
+                                        <span class="text-xs font-bold <?php echo $recent['payment_type'] === 'sale' ? ($is_wholesale ? 'text-purple-600' : 'text-green-600') : 'text-purple-600'; ?> bg-opacity-20 px-2 py-1 rounded-full">
+                                            <?php echo $recent['payment_type'] === 'sale' ? ($is_wholesale ? 'Wholesale' : 'Regular') : 'Return'; ?>
                                         </span>
                                         <span class="text-xs <?php echo $recent['is_auto_generated'] == 1 ? 'text-green-600 bg-green-50' : 'text-purple-600 bg-purple-50'; ?> px-2 py-1 rounded-full">
                                             <?php echo $recent['is_auto_generated'] == 1 ? 'Auto' : 'Manual'; ?>
@@ -891,7 +1020,7 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                                     </div>
                                 </div>
                                 <h4 class="font-medium text-gray-800 text-sm mb-1 truncate"><?php echo htmlspecialchars($recent['invoice_no']); ?></h4>
-                                <p class="text-sm font-bold text-blue-600 mb-2">Rs <?php echo number_format($recent['amount'], 2); ?></p>
+                                <p class="text-sm font-bold <?php echo $recent['payment_type'] === 'sale' ? ($is_wholesale ? 'text-purple-600' : 'text-green-600') : 'text-blue-600'; ?> mb-2">Rs <?php echo number_format($recent['amount'], 2); ?></p>
                                 <div class="flex items-center justify-between text-xs text-gray-500">
                                     <span><?php echo $recent_date->format('M d, h:i A'); ?></span>
                                     <span><?php echo htmlspecialchars($recent['created_by_name']); ?></span>
@@ -995,6 +1124,11 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                     <div class="flex items-center justify-between">
                         <span class="text-gray-600">Payment Source:</span>
                         <span id="viewPaymentSource" class="font-bold"></span>
+                    </div>
+
+                    <div id="viewSaleTypeSection" class="flex items-center justify-between">
+                        <span class="text-gray-600">Sale Type:</span>
+                        <span id="viewSaleType" class="font-bold"></span>
                     </div>
 
                     <div id="viewNotesSection" class="pt-4 border-t border-gray-200">
@@ -1155,10 +1289,22 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
         function showViewModal(payment) {
             // Fill view modal with data
             document.getElementById('viewInvoiceNo').textContent = payment.invoice_no;
-            document.getElementById('viewPaymentType').innerHTML =
-                `<span class="${payment.payment_type === 'sale' ? 'badge-sale' : 'badge-return'}">${
-                    payment.payment_type === 'sale' ? 'Sale Payment' : 'Return Payment'
-                }</span>`;
+
+            // Determine payment type badge
+            let paymentTypeHTML = '';
+            if (payment.payment_type === 'sale') {
+                if (payment.sale_type === 'wholesale') {
+                    paymentTypeHTML = `<span class="badge-sale mr-1">Sale Payment</span> <span class="badge-wholesale">Wholesale</span>`;
+                } else if (payment.sale_type === 'regular') {
+                    paymentTypeHTML = `<span class="badge-sale mr-1">Sale Payment</span> <span class="badge-regular">Regular</span>`;
+                } else {
+                    paymentTypeHTML = `<span class="badge-sale">Sale Payment</span>`;
+                }
+            } else {
+                paymentTypeHTML = `<span class="badge-return">Return Payment</span>`;
+            }
+            document.getElementById('viewPaymentType').innerHTML = paymentTypeHTML;
+
             document.getElementById('viewReferenceId').textContent = '#' + payment.reference_id.toString().padStart(6, '0');
             document.getElementById('viewAmount').textContent = 'Rs ' + parseFloat(payment.amount).toFixed(2);
             document.getElementById('viewPaymentMethod').innerHTML =
@@ -1206,6 +1352,17 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                 `<span class="${payment.is_auto_generated == 1 ? 'badge-auto' : 'badge-manual'}">
                     ${payment.is_auto_generated == 1 ? 'Auto-generated' : 'Manual Entry'}
                 </span>`;
+
+            // Show sale type if available
+            if (payment.sale_type && payment.sale_type !== 'manual') {
+                document.getElementById('viewSaleTypeSection').style.display = 'flex';
+                document.getElementById('viewSaleType').innerHTML =
+                    `<span class="${payment.sale_type === 'wholesale' ? 'badge-wholesale' : 'badge-regular'}">
+                        ${payment.sale_type === 'wholesale' ? 'Wholesale Sale' : 'Regular Sale'}
+                    </span>`;
+            } else {
+                document.getElementById('viewSaleTypeSection').style.display = 'none';
+            }
 
             document.getElementById('viewNotes').textContent = payment.notes || 'No notes available';
 
@@ -1288,22 +1445,35 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
         function exportToExcel() {
             try {
                 const rows = [];
-                rows.push(['Invoice No', 'Payment Type', 'Reference ID', 'Amount', 'Payment Method', 'Status', 'Source', 'Payment Date', 'Created By']);
+                rows.push(['Invoice No', 'Payment Type', 'Sale Type', 'Reference ID', 'Amount', 'Payment Method', 'Status', 'Source', 'Payment Date', 'Created By', 'Customer Name']);
 
                 <?php
                 mysqli_data_seek($result, 0);
                 while ($row = mysqli_fetch_assoc($result)):
+                    $payment_date = new DateTime($row['payment_date']);
+                    $sale_type_display = '';
+                    if ($row['payment_type'] === 'sale') {
+                        if ($row['sale_type'] === 'regular') {
+                            $sale_type_display = 'Regular Sale';
+                        } elseif ($row['sale_type'] === 'wholesale') {
+                            $sale_type_display = 'Wholesale Sale';
+                        } else {
+                            $sale_type_display = 'Sale';
+                        }
+                    }
                 ?>
                     rows.push([
                         '<?php echo $row['invoice_no']; ?>',
                         '<?php echo $row['payment_type'] === 'sale' ? 'Sale Payment' : 'Return Payment'; ?>',
+                        '<?php echo $sale_type_display; ?>',
                         <?php echo $row['reference_id']; ?>,
                         <?php echo $row['amount']; ?>,
                         '<?php echo $row['payment_method']; ?>',
                         '<?php echo ucfirst($row['payment_status']); ?>',
                         '<?php echo $row['is_auto_generated'] == 1 ? 'Auto-generated' : 'Manual'; ?>',
-                        '<?php echo $row['payment_date']; ?>',
-                        '<?php echo addslashes($row['created_by_name']); ?>'
+                        '<?php echo $payment_date->format('Y-m-d H:i:s'); ?>',
+                        '<?php echo addslashes($row['created_by_name']); ?>',
+                        '<?php echo addslashes($row['customer_name']); ?>'
                     ]);
                 <?php endwhile; ?>
 
@@ -1342,11 +1512,13 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
         // Filter functionality
         const typeFilter = document.getElementById('typeFilter');
         const sourceFilter = document.getElementById('sourceFilter');
+        const saleTypeFilter = document.getElementById('saleTypeFilter');
         const dateFilter = document.getElementById('dateFilter');
 
         function applyFilters() {
             const selectedType = typeFilter?.value;
             const selectedSource = sourceFilter?.value;
+            const selectedSaleType = saleTypeFilter?.value;
             const selectedDate = dateFilter?.value;
 
             const rows = document.querySelectorAll('tbody tr');
@@ -1355,8 +1527,18 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                 const sourceText = row.cells[0]?.textContent.toLowerCase();
                 const dateText = row.cells[3]?.textContent.toLowerCase();
 
+                // Get sale type from badges
+                const regularBadge = row.querySelector('.badge-regular');
+                const wholesaleBadge = row.querySelector('.badge-wholesale');
+                const manualBadge = row.querySelector('.badge-manual');
+
+                const rowSaleType = regularBadge ? 'regular' :
+                    wholesaleBadge ? 'wholesale' :
+                    manualBadge ? 'manual' : 'unknown';
+
                 let typeMatch = true;
                 let sourceMatch = true;
+                let saleTypeMatch = true;
                 let dateMatch = true;
 
                 if (selectedType) {
@@ -1374,16 +1556,27 @@ while ($row = mysqli_fetch_assoc($summary_result)) {
                     }
                 }
 
+                if (selectedSaleType) {
+                    if (selectedSaleType === 'regular') {
+                        saleTypeMatch = rowSaleType === 'regular';
+                    } else if (selectedSaleType === 'wholesale') {
+                        saleTypeMatch = rowSaleType === 'wholesale';
+                    } else if (selectedSaleType === 'manual') {
+                        saleTypeMatch = rowSaleType === 'manual' || rowSaleType === 'unknown';
+                    }
+                }
+
                 if (selectedDate) {
                     dateMatch = dateText.includes(selectedDate);
                 }
 
-                row.style.display = typeMatch && sourceMatch && dateMatch ? '' : 'none';
+                row.style.display = typeMatch && sourceMatch && saleTypeMatch && dateMatch ? '' : 'none';
             });
         }
 
         if (typeFilter) typeFilter.addEventListener('change', applyFilters);
         if (sourceFilter) sourceFilter.addEventListener('change', applyFilters);
+        if (saleTypeFilter) saleTypeFilter.addEventListener('change', applyFilters);
         if (dateFilter) dateFilter.addEventListener('change', applyFilters);
 
         // Show notification function
