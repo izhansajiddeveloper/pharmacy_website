@@ -34,9 +34,11 @@ Search medicines using generic names for accurate identification.
 View all stock batches, quantities, expiry dates, and locations.
 ![stock](https://github.com/izhansajiddeveloper/pharmacy_website/blob/6b5970176dc65ecef314c4163c93a86ef15c61dd/stock.png)
 
-🛠️ Add/Edit Stock
+ Payments & Expenses
 
-Page to add new stock or edit existing batches with pricing and supplier info.
+Page to log payments, record expenses, and view financial reports.
+
+
 
 
 🛒 Sales & Invoices
@@ -49,9 +51,7 @@ Record sales, generate invoices, and track batch-wise stock deduction.
 Admin panel to manage users, payments, expenses, and overall analytics.
 ![admin dashboard](https://github.com/izhansajiddeveloper/pharmacy_website/blob/0c26af350f2b4ea486a15c1676c56658efefaf39/admin%20dashboard.png)
 
-💵 Payments & Expenses
-
-Page to log payments, record expenses, and view financial reports.
+💵
 
 
 🚀 Key Features
