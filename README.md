@@ -42,7 +42,7 @@ Page to add new stock or edit existing batches with pricing and supplier info.
 🛒 Sales & Invoices
 
 Record sales, generate invoices, and track batch-wise stock deduction.
-
+![sale](https://github.com/izhansajiddeveloper/pharmacy_website/blob/e0fb2d47acd6758281dc60e40d2e45d41d32d5e5/sales.png)
 
 🧑‍💼 Admin Dashboard
 
