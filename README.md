@@ -6,6 +6,7 @@ A complete pharmacy management system built with PHP, MySQL, JavaScript, and Boo
 🏠 Home Page
 
 Main landing page showing the pharmacy system overview and navigation.
+![Home Page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/32ca76a14469cb5a4fc588fa91963e836a360f8e/home.png)
 
 
 🔐 Login / Authentication
