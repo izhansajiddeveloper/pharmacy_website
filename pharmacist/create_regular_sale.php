@@ -324,7 +324,7 @@ $medicines_result = mysqli_query($conn, $medicines_query);
                         </div>
                         <div class="flex-1 min-w-[150px]">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-percentage"></i> Discount (Rs)
+                                <i class="fas fa-percentage"></i> Discount %
                             </label>
                             <input type="number" name="discount" id="discount" min="0" step="0.01" value="0"
                                 class="w-full form-input px-4 py-2 md:py-3 rounded-lg"
@@ -584,14 +584,29 @@ $medicines_result = mysqli_query($conn, $medicines_query);
 
             // Get discount
             const discount = parseFloat(document.getElementById('discount').value) || 0;
+            const total = subtotal;
+            let perc = 0;
+
+            if(discount !=0){
+             perc = (total/100)*discount;
+             res = total-perc;
+
+        }else{
+             res = total;
+
+        }
+
+
+
+
+
 
             // Calculate total
-            const total = Math.max(0, subtotal - discount);
 
             // Update display
             document.getElementById('subtotal').textContent = 'Rs' + subtotal.toFixed(2);
             document.getElementById('discountDisplay').textContent = 'Rs' + discount.toFixed(2);
-            document.getElementById('totalAmount').textContent = 'Rs' + total.toFixed(2);
+            document.getElementById('totalAmount').textContent = 'Rs' + res.toFixed(2);
             document.getElementById('itemCount').textContent = totalItems;
         }
 
