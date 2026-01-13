@@ -10,15 +10,15 @@ Main landing page showing the pharmacy system overview and navigation.
 
 
 🔐 Login / Authentication
-![login page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/0f8ee5a9334bbe3cbc07fc296f8b6341775678fc/login.png)
 Secure login page for pharmacists and admin users.
+![login page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/0f8ee5a9334bbe3cbc07fc296f8b6341775678fc/login.png)
 
 
 🧑‍⚕️ Pharmacist Dashboard
 
 Dashboard for pharmacists to access sales, stock, and medicine management.
 
-
+![pharamcist Dashboard](https://github.com/izhansajiddeveloper/pharmacy_website/blob/57b414c205b8e3c7b19a734799dbfa9ead533edc/pharma%20dashboard.png)
 🔎 Search Medicine by Brand
 
 Allows searching medicines based on brand name for quick access.
