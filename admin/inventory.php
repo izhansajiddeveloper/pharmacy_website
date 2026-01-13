@@ -53,16 +53,20 @@ $location_inventory = mysqli_query(
 // Get top valuable medicines
 $valuable_medicines = mysqli_query(
     $conn,
-    "SELECT m.name, m.generic_name,
-            SUM(sb.quantity) as total_units,
-            SUM(sb.quantity * sb.purchase_price) as total_value,
-            MAX(sb.purchase_price) as max_unit_price
+    "SELECT 
+        m.name AS medicine_name,
+        mg.name AS generic_name,
+        SUM(sb.quantity) AS total_units,
+        SUM(sb.quantity * sb.purchase_price) AS total_value,
+        MAX(sb.purchase_price) AS max_unit_price
      FROM medicines m
+     LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
      JOIN stock_batches sb ON m.id = sb.medicine_id
-     GROUP BY m.id
+     GROUP BY m.id, m.name, mg.name
      ORDER BY total_value DESC
      LIMIT 10"
 );
+
 
 // Get inventory turnover (medicines with sales)
 $turnover_query = mysqli_query(
@@ -533,9 +537,14 @@ $growth_query = mysqli_query(
                                                     <i class="fas fa-pills text-purple-600"></i>
                                                 </div>
                                                 <div>
-                                                    <h4 class="font-medium text-gray-800"><?php echo htmlspecialchars($medicine['name']); ?></h4>
-                                                    <p class="text-xs text-gray-500"><?php echo htmlspecialchars($medicine['generic_name']); ?></p>
+                                                    <h4 class="font-medium text-gray-800">
+                                                        <?php echo htmlspecialchars($medicine['medicine_name']); ?>
+                                                    </h4>
+                                                    <p class="text-xs text-gray-500">
+                                                        <?php echo htmlspecialchars($medicine['generic_name'] ?? ''); ?>
+                                                    </p>
                                                 </div>
+
                                             </div>
                                         </td>
                                         <td class="px-6 py-4">

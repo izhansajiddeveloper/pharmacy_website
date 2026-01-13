@@ -7,17 +7,25 @@ if ($_SESSION['role'] !== 'admin') {
     exit;
 }
 
-// Total stock per medicine (with category and type)
-$stock_result = mysqli_query($conn, "SELECT m.name, m.generic_name, c.name as category_name, 
-                                            SUM(sb.quantity) AS total_qty,
-                                            AVG(sb.purchase_price) as avg_cost,
-                                            SUM(sb.quantity * sb.purchase_price) as total_value
-                                     FROM stock_batches sb
-                                     JOIN medicines m ON sb.medicine_id = m.id
-                                     LEFT JOIN medicine_categories c ON m.category_id = c.id
-                                     GROUP BY m.id
-                                     ORDER BY total_qty DESC
-                                     LIMIT 10");
+// Total stock per medicine (with category and generic)
+$stock_result = mysqli_query(
+    $conn,
+    "SELECT 
+        m.name AS medicine_name,
+        mg.name AS generic_name,
+        c.name AS category_name,
+        SUM(sb.quantity) AS total_qty,
+        AVG(sb.purchase_price) AS avg_cost,
+        SUM(sb.quantity * sb.purchase_price) AS total_value
+     FROM stock_batches sb
+     JOIN medicines m ON sb.medicine_id = m.id
+     LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+     LEFT JOIN medicine_categories c ON m.category_id = c.id
+     GROUP BY m.id, m.name, mg.name, c.name
+     ORDER BY total_qty DESC
+     LIMIT 10"
+);
+
 
 // Total stock value
 $total_stock_value = mysqli_query($conn, "SELECT SUM(sb.quantity * sb.purchase_price) as total_value
@@ -72,27 +80,37 @@ $top_pharmacists = mysqli_query($conn, "SELECT u.name,
                                         LIMIT 5");
 
 // Expiry soon (within 30 days)
-$expiry_result = mysqli_query($conn, "SELECT m.name, m.generic_name, 
-                                             sb.batch_no, sb.quantity,
-                                             sb.expiry_date, sb.purchase_price,
-                                             DATEDIFF(sb.expiry_date, CURDATE()) as days_left
-                                     FROM stock_batches sb
-                                     JOIN medicines m ON sb.medicine_id = m.id
-                                     WHERE sb.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
-                                     ORDER BY sb.expiry_date ASC
-                                     LIMIT 15");
+$expiry_result = mysqli_query(
+    $conn,
+    "SELECT 
+        m.name AS medicine_name,
+        mg.name AS generic_name,
+        sb.batch_no,
+        sb.quantity,
+        sb.expiry_date,
+        sb.purchase_price,
+        DATEDIFF(sb.expiry_date, CURDATE()) AS days_left
+     FROM stock_batches sb
+     JOIN medicines m ON sb.medicine_id = m.id
+     LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
+     WHERE sb.expiry_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+     ORDER BY sb.expiry_date ASC
+     LIMIT 15"
+);
+
 
 // Low stock medicines (less than 50 units)
 $low_stock = mysqli_query(
     $conn,
     "SELECT 
-        m.name,
-        m.generic_name,
+        m.name AS medicine_name,
+        mg.name AS generic_name,
         COALESCE(SUM(sb.quantity), 0) AS total_qty
      FROM medicines m
+     LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
      JOIN stock_batches sb ON m.id = sb.medicine_id
      WHERE sb.is_expired = 0
-     GROUP BY m.id, m.name, m.generic_name
+     GROUP BY m.id, m.name, mg.name
      HAVING total_qty <= 50
      ORDER BY total_qty ASC
      LIMIT 10"
@@ -666,7 +684,7 @@ $category_sales = mysqli_query($conn, "SELECT c.name as category_name,
                                             <i class="fas <?php echo $days_left <= 7 ? 'fa-exclamation text-red-600' : 'fa-clock text-orange-600'; ?>"></i>
                                         </div>
                                         <div class="flex-1">
-                                            <h4 class="font-medium text-gray-800"><?php echo htmlspecialchars($expiry['name']); ?></h4>
+                                            <h4 class="font-medium text-gray-800"><?php echo htmlspecialchars($expiry['medicine_name']); ?></h4>
                                             <p class="text-sm text-gray-500">Batch: <?php echo htmlspecialchars($expiry['batch_no']); ?></p>
                                             <div class="flex items-center space-x-3 mt-1">
                                                 <span class="text-xs <?php echo $days_left <= 7 ? 'text-red-600' : 'text-orange-600'; ?> font-medium">
@@ -773,7 +791,7 @@ $category_sales = mysqli_query($conn, "SELECT c.name as category_name,
                                                     <i class="fas fa-pills text-blue-600 text-sm"></i>
                                                 </div>
                                                 <div>
-                                                    <h4 class="font-medium text-gray-800"><?php echo htmlspecialchars($stock['name']); ?></h4>
+                                                    <h4 class="font-medium text-gray-800"><?php echo htmlspecialchars($stock['medicine_name']); ?></h4>
                                                     <p class="text-xs text-gray-500"><?php echo htmlspecialchars($stock['generic_name']); ?></p>
                                                 </div>
                                             </div>
@@ -823,7 +841,8 @@ $category_sales = mysqli_query($conn, "SELECT c.name as category_name,
                     <div class="flex flex-col md:flex-row md:items-center justify-between">
                         <div class="mb-4 md:mb-0">
                             <div class="text-sm text-gray-500">
-                                Showing <?php echo min(10, $total_tock_items); ?> medicines by stock quantity •
+                                Showing <?php echo min(10, $total_stock_items ?? 0); ?> medicines by stock quantity •
+
                                 <span class="font-medium text-blue-600">Last Updated: <?php echo date('M d, Y H:i'); ?></span>
                             </div>
                         </div>

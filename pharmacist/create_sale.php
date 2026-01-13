@@ -41,6 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $invoice_no = generateUniqueInvoiceNo($conn);
         $customer_name = mysqli_real_escape_string($conn, $_POST['customer_name']);
         $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
+        $discount = floatval($_POST['discount']);
+        $total_amount_before_discount = 0;
 
         // Process sale items first to calculate total
         $medicine_ids = $_POST['medicine_id'];
@@ -48,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $prices = $_POST['price'];
 
         $items_data = [];
-        $total_amount_before_discount = 0;
 
         for ($i = 0; $i < count($medicine_ids); $i++) {
             $medicine_id = intval($medicine_ids[$i]);
@@ -65,21 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Dynamic discount calculation
-        if ($total_amount_before_discount >= 5000) {
-            $discount_percentage = 8;
-        } elseif ($total_amount_before_discount >= 2000) {
-            $discount_percentage = 5;
-        } elseif ($total_amount_before_discount >= 1000) {
-            $discount_percentage = 3;
-        } elseif ($total_amount_before_discount >= 500) {
-            $discount_percentage = 2;
-        } else {
-            $discount_percentage = 0;
-        }
-
-        // Calculate discount amount
-        $discount_amount = ($total_amount_before_discount * $discount_percentage) / 100;
+        // Calculate discount amount based on percentage
+        $discount_amount = ($total_amount_before_discount * $discount) / 100;
         $total_amount = max(0, $total_amount_before_discount - $discount_amount);
 
         // Insert sale
@@ -277,13 +265,6 @@ if ($selected_medicine_id > 0) {
             background-color: rgba(59, 130, 246, 0.05);
         }
 
-        .discount-badge {
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
         .price-readonly {
             background-color: #f3f4f6;
             color: #374151;
@@ -348,32 +329,9 @@ if ($selected_medicine_id > 0) {
             <?php endif; ?>
 
             <form method="POST" id="saleForm" class="space-y-4 md:space-y-6">
-                <!-- Discount Information Bar -->
-                <div class="glass-card rounded-2xl p-4 bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h4 class="font-bold text-blue-800 flex items-center">
-                                <i class="fas fa-percentage mr-2"></i>
-                                Automatic Discount Rules (Wholesale)
-                            </h4>
-                            <div class="text-sm text-blue-600 mt-1">
-                                <span class="bg-blue-100 px-2 py-1 rounded">0-500: 0%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">500-1000: 2%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">1000-2000: 3%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">2000-5000: 5%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">5000+: 8%</span>
-                            </div>
-                        </div>
-                        <div class="text-sm text-blue-700 font-medium">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Discount auto-calculated based on subtotal
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Customer & Payment Info -->
                 <div class="glass-card rounded-2xl p-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <i class="fas fa-user"></i> Customer Name
@@ -393,6 +351,14 @@ if ($selected_medicine_id > 0) {
                                 <option value="Card">Card</option>
                                 <option value="Credit">Credit</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-percentage"></i> Discount %
+                            </label>
+                            <input type="number" name="discount" id="discount" min="0" step="0.01" value="0"
+                                class="w-full form-input px-4 py-2 md:py-3 rounded-lg"
+                                placeholder="0.00">
                         </div>
                     </div>
                 </div>
@@ -449,20 +415,12 @@ if ($selected_medicine_id > 0) {
                                 <span class="text-gray-600">Subtotal:</span>
                                 <span id="subtotal" class="font-bold text-gray-800">Rs0.00</span>
                             </div>
-                            <div class="flex justify-between text-sm text-blue-600">
-                                <span>Discount Rate:</span>
-                                <span id="autoDiscountRate" class="font-bold">0%</span>
-                            </div>
                         </div>
 
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Discount:</span>
                                 <span id="discountDisplay" class="font-bold text-red-600">Rs0.00</span>
-                            </div>
-                            <div class="flex justify-between text-sm text-gray-500">
-                                <span>Applied Discount:</span>
-                                <span id="appliedDiscountInfo">Auto-calculated</span>
                             </div>
                             <div class="border-t border-gray-200 pt-2">
                                 <div class="flex justify-between">
@@ -504,32 +462,6 @@ if ($selected_medicine_id > 0) {
         const selectedMedicine = <?php echo $selected_medicine_data ? json_encode($selected_medicine_data) : 'null'; ?>;
 
         let itemCount = 0;
-        let currentAutoDiscount = 0;
-        let currentAutoDiscountPercentage = 0;
-
-        // Calculate automatic discount based on total amount
-        function calculateAutoDiscount(subtotal) {
-            let discountPercentage = 0;
-
-            if (subtotal >= 5000) {
-                discountPercentage = 8;
-            } else if (subtotal >= 2000) {
-                discountPercentage = 5;
-            } else if (subtotal >= 1000) {
-                discountPercentage = 3;
-            } else if (subtotal >= 500) {
-                discountPercentage = 2;
-            } else {
-                discountPercentage = 0;
-            }
-
-            const discountAmount = (subtotal * discountPercentage) / 100;
-
-            return {
-                percentage: discountPercentage,
-                amount: discountAmount
-            };
-        }
 
         function addItemRow(medicineId = '', quantity = 1, price = 0) {
             const container = document.getElementById('itemsContainer');
@@ -687,23 +619,16 @@ if ($selected_medicine_id > 0) {
                 totalItems += quantity;
             });
 
-            // Calculate auto discount
-            const autoDiscount = calculateAutoDiscount(subtotal);
-            currentAutoDiscount = autoDiscount.amount;
-            currentAutoDiscountPercentage = autoDiscount.percentage;
-
-            // Calculate total
-            const total = Math.max(0, subtotal - currentAutoDiscount);
+            // Get discount
+            const discount = parseFloat(document.getElementById('discount').value) || 0;
+            const discountAmount = (subtotal * discount) / 100;
+            const total = Math.max(0, subtotal - discountAmount);
 
             // Update display
             document.getElementById('subtotal').textContent = 'Rs' + subtotal.toFixed(2);
-            document.getElementById('discountDisplay').textContent = 'Rs' + currentAutoDiscount.toFixed(2);
+            document.getElementById('discountDisplay').textContent = 'Rs' + discountAmount.toFixed(2);
             document.getElementById('totalAmount').textContent = 'Rs' + total.toFixed(2);
             document.getElementById('itemCount').textContent = totalItems;
-
-            // Update discount info
-            document.getElementById('autoDiscountRate').textContent = currentAutoDiscountPercentage + '%';
-            document.getElementById('appliedDiscountInfo').textContent = 'Auto-calculated (' + currentAutoDiscountPercentage + '%)';
         }
 
         function updateItemCount() {
@@ -774,6 +699,10 @@ if ($selected_medicine_id > 0) {
             }
 
             document.getElementById('quickSearch').focus();
+
+            // Update total when discount changes
+            document.getElementById('discount').addEventListener('input', updateTotal);
+            document.getElementById('discount').addEventListener('change', updateTotal);
 
             // Form validation
             document.getElementById('saleForm').addEventListener('submit', function(e) {
