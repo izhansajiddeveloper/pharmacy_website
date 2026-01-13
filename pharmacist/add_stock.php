@@ -341,6 +341,15 @@ if (isset($_POST['submit'])) {
             color: #9ca3af;
             pointer-events: none;
         }
+
+        .price-type-btn.active {
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+            color: white;
+        }
+
+        .price-type-btn:not(.active):hover {
+            background: var(--primary-gray-light);
+        }
     </style>
 </head>
 
@@ -425,12 +434,12 @@ if (isset($_POST['submit'])) {
                                 <span>Medicine Information</span>
                             </h3>
                             <div class="space-y-4">
-                                <div class="searchable-dropdown">
+                                <div class="searchable-dropdown ">
                                     <label class="block text-sm font-medium text-gray-700 mb-2 required">
                                         <i class="fas fa-capsules text-gray-400 mr-1"></i>
                                         Select Medicine
-                                    </label>
-                                    <input type="hidden" name="medicine_id" id="medicine_id" required
+                                    </label> 
+                                    <input type="hidden" name="medicine_id" id="medicine_id" required 
                                         value="<?php echo isset($_POST['medicine_id']) ? htmlspecialchars($_POST['medicine_id']) : ''; ?>">
                                     <input type="text" id="medicine_search"
                                         placeholder="Search medicine by name, generic, or category..."
@@ -515,7 +524,8 @@ if (isset($_POST['submit'])) {
                                         <input type="number" name="quantity" min="1" required
                                             placeholder="Total units"
                                             value="<?php echo isset($_POST['quantity']) ? htmlspecialchars($_POST['quantity']) : ''; ?>"
-                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500">
+                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500"
+                                            id="quantity">
                                     </div>
 
                                     <div>
@@ -526,7 +536,8 @@ if (isset($_POST['submit'])) {
                                         <input type="number" name="units_per_packet" min="1" required
                                             placeholder="e.g., 10"
                                             value="<?php echo isset($_POST['units_per_packet']) ? htmlspecialchars($_POST['units_per_packet']) : '1'; ?>"
-                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500">
+                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500"
+                                            id="units_per_packet">
                                     </div>
 
                                     <div>
@@ -537,7 +548,8 @@ if (isset($_POST['submit'])) {
                                         <input type="number" name="packets_per_box" min="1" required
                                             placeholder="e.g., 12"
                                             value="<?php echo isset($_POST['packets_per_box']) ? htmlspecialchars($_POST['packets_per_box']) : '1'; ?>"
-                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500">
+                                            class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500"
+                                            id="packets_per_box">
                                     </div>
                                 </div>
 
@@ -625,44 +637,123 @@ if (isset($_POST['submit'])) {
                                 <i class="fas fa-tag text-green-500"></i>
                                 <span>Price Information</span>
                             </h3>
+
+                            <!-- Price Type Selection -->
+                            <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    <i class="fas fa-calculator text-gray-400 mr-1"></i>
+                                    Price Calculation Basis
+                                </label>
+                                <div class="flex flex-wrap gap-2">
+                                    <button type="button" id="pricePerUnitBtn" class="price-type-btn active px-4 py-2 bg-green-500 text-white rounded-lg font-medium transition">
+                                        <i class="fas fa-capsules mr-2"></i>
+                                        Per Unit
+                                    </button>
+                                    <button type="button" id="pricePerPacketBtn" class="price-type-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                                        <i class="fas fa-box mr-2"></i>
+                                        Per Packet
+                                    </button>
+                                    <button type="button" id="pricePerBoxBtn" class="price-type-btn px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition">
+                                        <i class="fas fa-layer-group mr-2"></i>
+                                        Per Box
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2" id="priceBasisInfo">
+                                    Currently entering prices per unit. Changing this will recalculate all prices.
+                                </p>
+                            </div>
+
                             <div class="space-y-4">
                                 <div class="price-card rounded-xl p-4">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 required">
-                                        <i class="fas fa-shopping-cart text-blue-500 mr-1"></i>
-                                        Purchase Price (Per Unit) (Rs)
-                                    </label>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-medium text-gray-700 required">
+                                            <i class="fas fa-shopping-cart text-blue-500 mr-1"></i>
+                                            Purchase Price <span id="purchasePriceLabel">(Per Unit)</span> (Rs)
+                                        </label>
+                                        <span class="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded hidden" id="purchaseAutoLabel">
+                                            Auto-calculated from box
+                                        </span>
+                                    </div>
                                     <input type="number" name="purchase_price" step="0.01" min="0" required
                                         placeholder="0.00"
                                         value="<?php echo isset($_POST['purchase_price']) ? htmlspecialchars($_POST['purchase_price']) : ''; ?>"
                                         class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
                                         id="purchase_price">
-                                    <p class="text-xs text-gray-500 mt-1">Cost price per unit of medicine</p>
+                                    <div class="text-xs text-gray-500 mt-1 flex justify-between">
+                                        <span id="purchasePriceDescription">Cost price per unit of medicine</span>
+                                        <button type="button" onclick="calculateFromTotalPurchase()" class="text-blue-600 hover:text-blue-800 font-medium">
+                                            <i class="fas fa-calculator mr-1"></i>Calculate from total
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="price-card rounded-xl p-4">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 required">
-                                        <i class="fas fa-cash-register text-green-500 mr-1"></i>
-                                        Selling Price (Per Unit) (Rs)
-                                    </label>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-medium text-gray-700 required">
+                                            <i class="fas fa-cash-register text-green-500 mr-1"></i>
+                                            Selling Price <span id="sellingPriceLabel">(Per Unit)</span> (Rs)
+                                        </label>
+                                        <div class="flex items-center space-x-2">
+                                            <button type="button" onclick="autoSetSellingPrice(10)" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">
+                                                +10%
+                                            </button>
+                                            <button type="button" onclick="autoSetSellingPrice(20)" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">
+                                                +20%
+                                            </button>
+                                            <button type="button" onclick="autoSetSellingPrice(30)" class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200">
+                                                +30%
+                                            </button>
+                                        </div>
+                                    </div>
                                     <input type="number" name="selling_price" step="0.01" min="0" required
                                         placeholder="0.00"
                                         value="<?php echo isset($_POST['selling_price']) ? htmlspecialchars($_POST['selling_price']) : ''; ?>"
                                         class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-green-200 focus:border-green-500"
                                         id="selling_price">
-                                    <p class="text-xs text-gray-500 mt-1">Selling price per unit to customers</p>
+                                    <p class="text-xs text-gray-500 mt-1" id="sellingPriceDescription">Selling price per unit to customers</p>
                                 </div>
 
                                 <div class="price-card rounded-xl p-4">
-                                    <label class="block text-sm font-medium text-gray-700 mb-2 required">
-                                        <i class="fas fa-tags text-purple-500 mr-1"></i>
-                                        MRP (Per Unit) (Rs)
-                                    </label>
+                                    <div class="flex justify-between items-center mb-2">
+                                        <label class="text-sm font-medium text-gray-700 required">
+                                            <i class="fas fa-tags text-purple-500 mr-1"></i>
+                                            MRP <span id="mrpLabel">(Per Unit)</span> (Rs)
+                                        </label>
+                                        <button type="button" onclick="autoSetMRPFromSelling()" class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded hover:bg-purple-200">
+                                            <i class="fas fa-magic mr-1"></i>Auto-set
+                                        </button>
+                                    </div>
                                     <input type="number" name="mrp" step="0.01" min="0" required
                                         placeholder="0.00"
                                         value="<?php echo isset($_POST['mrp']) ? htmlspecialchars($_POST['mrp']) : ''; ?>"
                                         class="w-full form-input px-4 py-3 rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-purple-500"
                                         id="mrp">
-                                    <p class="text-xs text-gray-500 mt-1">Maximum Retail Price per unit printed on package</p>
+                                    <p class="text-xs text-gray-500 mt-1" id="mrpDescription">Maximum Retail Price per unit printed on package</p>
+                                </div>
+
+                                <!-- Additional Price Info Row -->
+                                <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+                                    <h4 class="font-medium text-blue-700 mb-3 flex items-center space-x-2">
+                                        <i class="fas fa-info-circle"></i>
+                                        <span>Price Breakdown</span>
+                                    </h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                        <div class="text-center p-3 bg-white rounded border">
+                                            <div class="font-medium text-blue-700 mb-1">Per Box</div>
+                                            <div class="text-blue-600 font-bold" id="perBoxPurchase">Rs 0.00</div>
+                                            <div class="text-xs text-gray-500 mt-1" id="boxCalculationInfo">0 packets × 0 units</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-white rounded border">
+                                            <div class="font-medium text-green-700 mb-1">Per Packet</div>
+                                            <div class="text-green-600 font-bold" id="perPacketPurchase">Rs 0.00</div>
+                                            <div class="text-xs text-gray-500 mt-1" id="packetCalculationInfo">0 units</div>
+                                        </div>
+                                        <div class="text-center p-3 bg-white rounded border">
+                                            <div class="font-medium text-purple-700 mb-1">Per Unit</div>
+                                            <div class="text-purple-600 font-bold" id="perUnitPurchase">Rs 0.00</div>
+                                            <div class="text-xs text-gray-500 mt-1">Base unit price</div>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="bg-gray-50 rounded-lg p-4">
@@ -981,9 +1072,9 @@ if (isset($_POST['submit'])) {
         generateBatchBtn.addEventListener('click', generateBatchNumber);
 
         // Calculate total packets
-        const quantityInput = document.querySelector('input[name="quantity"]');
-        const unitsPerPacketInput = document.querySelector('input[name="units_per_packet"]');
-        const packetsPerBoxInput = document.querySelector('input[name="packets_per_box"]');
+        const quantityInput = document.getElementById('quantity');
+        const unitsPerPacketInput = document.getElementById('units_per_packet');
+        const packetsPerBoxInput = document.getElementById('packets_per_box');
         const totalPacketsInput = document.getElementById('total_packets');
 
         function calculateTotalPackets() {
@@ -1016,19 +1107,260 @@ if (isset($_POST['submit'])) {
         const profitMarginSpan = document.getElementById('profit_margin');
         const mrpDiscountSpan = document.getElementById('mrp_discount');
 
-        // Function to update price summaries
-        function updatePriceSummaries() {
-            const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
-            const sellingPrice = parseFloat(sellingPriceInput.value) || 0;
-            const mrp = parseFloat(mrpInput.value) || 0;
+        // New price calculation elements
+        const pricePerUnitBtn = document.getElementById('pricePerUnitBtn');
+        const pricePerPacketBtn = document.getElementById('pricePerPacketBtn');
+        const pricePerBoxBtn = document.getElementById('pricePerBoxBtn');
+        const priceBasisInfo = document.getElementById('priceBasisInfo');
 
-            purchaseSummary.textContent = 'Rs ' + purchasePrice.toFixed(2);
-            sellingSummary.textContent = 'Rs ' + sellingPrice.toFixed(2);
-            mrpSummary.textContent = 'Rs ' + mrp.toFixed(2);
+        const purchasePriceLabel = document.getElementById('purchasePriceLabel');
+        const sellingPriceLabel = document.getElementById('sellingPriceLabel');
+        const mrpLabel = document.getElementById('mrpLabel');
+
+        const purchaseAutoLabel = document.getElementById('purchaseAutoLabel');
+        const purchasePriceDescription = document.getElementById('purchasePriceDescription');
+        const sellingPriceDescription = document.getElementById('sellingPriceDescription');
+        const mrpDescription = document.getElementById('mrpDescription');
+
+        const perBoxPurchase = document.getElementById('perBoxPurchase');
+        const perPacketPurchase = document.getElementById('perPacketPurchase');
+        const perUnitPurchase = document.getElementById('perUnitPurchase');
+        const boxCalculationInfo = document.getElementById('boxCalculationInfo');
+        const packetCalculationInfo = document.getElementById('packetCalculationInfo');
+
+        let priceCalculationBasis = 'unit'; // 'unit', 'packet', or 'box'
+        let autoUpdateEnabled = true; // Track if auto-update is enabled
+
+        // Price type button functionality
+        pricePerUnitBtn.addEventListener('click', () => setPriceCalculationBasis('unit'));
+        pricePerPacketBtn.addEventListener('click', () => setPriceCalculationBasis('packet'));
+        pricePerBoxBtn.addEventListener('click', () => setPriceCalculationBasis('box'));
+
+        function setPriceCalculationBasis(basis) {
+            priceCalculationBasis = basis;
+
+            // Update button states
+            [pricePerUnitBtn, pricePerPacketBtn, pricePerBoxBtn].forEach(btn => {
+                btn.classList.remove('active', 'bg-green-500', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            });
+
+            const activeBtn = document.getElementById(`pricePer${basis.charAt(0).toUpperCase() + basis.slice(1)}Btn`);
+            activeBtn.classList.remove('bg-gray-200', 'text-gray-700', 'hover:bg-gray-300');
+            activeBtn.classList.add('active', 'bg-green-500', 'text-white');
+
+            // Update labels
+            const basisText = basis === 'unit' ? 'Per Unit' : basis === 'packet' ? 'Per Packet' : 'Per Box';
+            purchasePriceLabel.textContent = `(${basisText})`;
+            sellingPriceLabel.textContent = `(${basisText})`;
+            mrpLabel.textContent = `(${basisText})`;
+
+            // Update descriptions
+            const descriptions = {
+                unit: {
+                    purchase: 'Cost price per unit of medicine',
+                    selling: 'Selling price per unit to customers',
+                    mrp: 'Maximum Retail Price per unit printed on package'
+                },
+                packet: {
+                    purchase: 'Cost price per packet of medicine',
+                    selling: 'Selling price per packet to customers',
+                    mrp: 'Maximum Retail Price per packet printed on package'
+                },
+                box: {
+                    purchase: 'Cost price per box of medicine',
+                    selling: 'Selling price per box to customers',
+                    mrp: 'Maximum Retail Price per box printed on package'
+                }
+            };
+
+            purchasePriceDescription.textContent = descriptions[basis].purchase;
+            sellingPriceDescription.textContent = descriptions[basis].selling;
+            mrpDescription.textContent = descriptions[basis].mrp;
+
+            priceBasisInfo.textContent = `Currently entering prices ${basis === 'unit' ? 'per unit' : basis === 'packet' ? 'per packet' : 'per box'}. Changing this will recalculate all prices.`;
+
+            // Convert existing prices to new basis
+            convertPricesToNewBasis();
+            updatePriceBreakdown();
+        }
+
+        function convertPricesToNewBasis() {
+            const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+            const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+
+            let purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            let sellingPrice = parseFloat(sellingPriceInput.value) || 0;
+            let mrpPrice = parseFloat(mrpInput.value) || 0;
+
+            // Convert from current basis to unit price first
+            if (priceCalculationBasis === 'packet') {
+                // Convert from packet to unit
+                purchasePrice = purchasePrice / unitsPerPacket;
+                sellingPrice = sellingPrice / unitsPerPacket;
+                mrpPrice = mrpPrice / unitsPerPacket;
+            } else if (priceCalculationBasis === 'box') {
+                // Convert from box to unit
+                purchasePrice = purchasePrice / (unitsPerPacket * packetsPerBox);
+                sellingPrice = sellingPrice / (unitsPerPacket * packetsPerBox);
+                mrpPrice = mrpPrice / (unitsPerPacket * packetsPerBox);
+            }
+
+            // Now convert from unit to new basis
+            if (priceCalculationBasis === 'packet') {
+                purchasePrice = purchasePrice * unitsPerPacket;
+                sellingPrice = sellingPrice * unitsPerPacket;
+                mrpPrice = mrpPrice * unitsPerPacket;
+            } else if (priceCalculationBasis === 'box') {
+                purchasePrice = purchasePrice * unitsPerPacket * packetsPerBox;
+                sellingPrice = sellingPrice * unitsPerPacket * packetsPerBox;
+                mrpPrice = mrpPrice * unitsPerPacket * packetsPerBox;
+            }
+
+            // Update input values
+            if (purchasePrice > 0) purchasePriceInput.value = purchasePrice.toFixed(2);
+            if (sellingPrice > 0) sellingPriceInput.value = sellingPrice.toFixed(2);
+            if (mrpPrice > 0) mrpInput.value = mrpPrice.toFixed(2);
+
+            updatePriceSummaries();
+        }
+
+        // Function to update price breakdown
+        function updatePriceBreakdown() {
+            const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+            const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+            const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+
+            let unitPrice = purchasePrice;
+            let packetPrice = purchasePrice;
+            let boxPrice = purchasePrice;
+
+            if (priceCalculationBasis === 'packet') {
+                unitPrice = purchasePrice / unitsPerPacket;
+                packetPrice = purchasePrice;
+                boxPrice = purchasePrice * packetsPerBox;
+            } else if (priceCalculationBasis === 'box') {
+                unitPrice = purchasePrice / (unitsPerPacket * packetsPerBox);
+                packetPrice = purchasePrice / packetsPerBox;
+                boxPrice = purchasePrice;
+            } else {
+                // Unit basis
+                unitPrice = purchasePrice;
+                packetPrice = purchasePrice * unitsPerPacket;
+                boxPrice = purchasePrice * unitsPerPacket * packetsPerBox;
+            }
+
+            perUnitPurchase.textContent = 'Rs ' + unitPrice.toFixed(2);
+            perPacketPurchase.textContent = 'Rs ' + packetPrice.toFixed(2);
+            perBoxPurchase.textContent = 'Rs ' + boxPrice.toFixed(2);
+
+            boxCalculationInfo.textContent = `${packetsPerBox} packets × ${unitsPerPacket} units`;
+            packetCalculationInfo.textContent = `${unitsPerPacket} units`;
+
+            // Update auto-label visibility
+            if (priceCalculationBasis === 'box') {
+                purchaseAutoLabel.classList.remove('hidden');
+            } else {
+                purchaseAutoLabel.classList.add('hidden');
+            }
+        }
+
+        // Function to auto-set selling price based on percentage increase
+        function autoSetSellingPrice(percentage) {
+            const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            if (purchasePrice > 0) {
+                const sellingPrice = purchasePrice * (1 + percentage / 100);
+                sellingPriceInput.value = sellingPrice.toFixed(2);
+
+                // Also auto-set MRP if empty or too low
+                const currentMRP = parseFloat(mrpInput.value) || 0;
+                const suggestedMRP = sellingPrice * 1.1; // 10% above selling price
+                if (currentMRP === 0 || currentMRP < suggestedMRP) {
+                    mrpInput.value = suggestedMRP.toFixed(2);
+                }
+
+                updatePriceSummaries();
+                showNotification(`Selling price auto-set to ${percentage}% above purchase price`, 'info');
+            }
+        }
+
+        // Function to auto-set MRP from selling price
+        function autoSetMRPFromSelling() {
+            const sellingPrice = parseFloat(sellingPriceInput.value) || 0;
+            if (sellingPrice > 0) {
+                const mrpPrice = sellingPrice * 1.15; // 15% above selling price
+                mrpInput.value = mrpPrice.toFixed(2);
+                updatePriceSummaries();
+                showNotification('MRP auto-set to 15% above selling price', 'info');
+            }
+        }
+
+        // Function to calculate from total purchase amount
+        function calculateFromTotalPurchase() {
+            const totalPurchase = prompt('Enter total purchase amount for this batch (Rs):', '');
+            if (totalPurchase && !isNaN(totalPurchase) && parseFloat(totalPurchase) > 0) {
+                const quantity = parseFloat(quantityInput.value) || 0;
+                if (quantity > 0) {
+                    let purchasePrice = parseFloat(totalPurchase) / quantity;
+
+                    // Adjust based on current price calculation basis
+                    if (priceCalculationBasis === 'packet') {
+                        const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+                        purchasePrice = purchasePrice * unitsPerPacket;
+                    } else if (priceCalculationBasis === 'box') {
+                        const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+                        const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+                        purchasePrice = purchasePrice * unitsPerPacket * packetsPerBox;
+                    }
+
+                    purchasePriceInput.value = purchasePrice.toFixed(2);
+
+                    // Auto-update selling price and MRP
+                    const sellingPrice = purchasePrice * 1.2;
+                    sellingPriceInput.value = sellingPrice.toFixed(2);
+
+                    const mrpPrice = sellingPrice * 1.15;
+                    mrpInput.value = mrpPrice.toFixed(2);
+
+                    updatePriceSummaries();
+                    showNotification('Prices calculated from total purchase amount', 'success');
+                } else {
+                    alert('Please enter quantity first');
+                }
+            }
+        }
+
+        // Enhanced price calculation function
+        function updatePriceSummaries() {
+            const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+            const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+
+            let purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            let sellingPrice = parseFloat(sellingPriceInput.value) || 0;
+            let mrp = parseFloat(mrpInput.value) || 0;
+
+            // Convert to unit price for summary display
+            let unitPurchasePrice = purchasePrice;
+            let unitSellingPrice = sellingPrice;
+            let unitMRP = mrp;
+
+            if (priceCalculationBasis === 'packet') {
+                unitPurchasePrice = purchasePrice / unitsPerPacket;
+                unitSellingPrice = sellingPrice / unitsPerPacket;
+                unitMRP = mrp / unitsPerPacket;
+            } else if (priceCalculationBasis === 'box') {
+                unitPurchasePrice = purchasePrice / (unitsPerPacket * packetsPerBox);
+                unitSellingPrice = sellingPrice / (unitsPerPacket * packetsPerBox);
+                unitMRP = mrp / (unitsPerPacket * packetsPerBox);
+            }
+
+            purchaseSummary.textContent = 'Rs ' + unitPurchasePrice.toFixed(2);
+            sellingSummary.textContent = 'Rs ' + unitSellingPrice.toFixed(2);
+            mrpSummary.textContent = 'Rs ' + unitMRP.toFixed(2);
 
             // Calculate profit margin
-            if (purchasePrice > 0 && sellingPrice > 0) {
-                const profitMargin = ((sellingPrice - purchasePrice) / purchasePrice * 100).toFixed(1);
+            if (unitPurchasePrice > 0 && unitSellingPrice > 0) {
+                const profitMargin = ((unitSellingPrice - unitPurchasePrice) / unitPurchasePrice * 100).toFixed(1);
                 profitMarginSpan.textContent = profitMargin + '%';
                 profitMarginSpan.className = profitMargin >= 0 ? 'font-medium text-green-600' : 'font-medium text-red-600';
             } else {
@@ -1036,8 +1368,8 @@ if (isset($_POST['submit'])) {
             }
 
             // Calculate MRP discount
-            if (mrp > 0 && sellingPrice > 0) {
-                const discount = ((mrp - sellingPrice) / mrp * 100).toFixed(1);
+            if (unitMRP > 0 && unitSellingPrice > 0) {
+                const discount = ((unitMRP - unitSellingPrice) / unitMRP * 100).toFixed(1);
                 mrpDiscountSpan.textContent = discount + '%';
                 mrpDiscountSpan.className = discount >= 0 ? 'font-medium text-blue-600' : 'font-medium text-red-600';
             } else {
@@ -1045,8 +1377,8 @@ if (isset($_POST['submit'])) {
             }
 
             // Validate pricing logic
-            if (purchasePrice > 0 && sellingPrice > 0) {
-                if (sellingPrice < purchasePrice) {
+            if (unitPurchasePrice > 0 && unitSellingPrice > 0) {
+                if (unitSellingPrice < unitPurchasePrice) {
                     sellingPriceInput.style.borderColor = '#ef4444';
                     sellingPriceInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
                 } else {
@@ -1055,43 +1387,168 @@ if (isset($_POST['submit'])) {
                 }
             }
 
-            if (sellingPrice > 0 && mrp > 0 && mrp < sellingPrice) {
+            if (unitSellingPrice > 0 && unitMRP > 0 && unitMRP < unitSellingPrice) {
                 mrpInput.style.borderColor = '#ef4444';
                 mrpInput.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
             } else {
                 mrpInput.style.borderColor = '';
                 mrpInput.style.boxShadow = '';
             }
+
+            // Update price breakdown
+            updatePriceBreakdown();
         }
 
-        // Auto-calculate selling price and MRP based on purchase price
+        // Main function to update selling price and MRP when purchase price changes
+        function updateSellingAndMRPFromPurchase() {
+            if (!autoUpdateEnabled) return;
+
+            const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            if (purchasePrice > 0) {
+                const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+                const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+
+                // Calculate unit price based on current basis
+                let unitPrice = purchasePrice;
+                if (priceCalculationBasis === 'packet') {
+                    unitPrice = purchasePrice / unitsPerPacket;
+                } else if (priceCalculationBasis === 'box') {
+                    unitPrice = purchasePrice / (unitsPerPacket * packetsPerBox);
+                }
+
+                // Calculate selling price (20% above purchase unit price)
+                const sellingUnitPrice = unitPrice * 1.2;
+                let sellingPrice = sellingUnitPrice;
+
+                // Convert back to current basis
+                if (priceCalculationBasis === 'packet') {
+                    sellingPrice = sellingUnitPrice * unitsPerPacket;
+                } else if (priceCalculationBasis === 'box') {
+                    sellingPrice = sellingUnitPrice * unitsPerPacket * packetsPerBox;
+                }
+
+                sellingPriceInput.value = sellingPrice.toFixed(2);
+
+                // Calculate MRP (15% above selling unit price)
+                const mrpUnitPrice = sellingUnitPrice * 1.15;
+                let mrpPrice = mrpUnitPrice;
+
+                // Convert back to current basis
+                if (priceCalculationBasis === 'packet') {
+                    mrpPrice = mrpUnitPrice * unitsPerPacket;
+                } else if (priceCalculationBasis === 'box') {
+                    mrpPrice = mrpUnitPrice * unitsPerPacket * packetsPerBox;
+                }
+
+                mrpInput.value = mrpPrice.toFixed(2);
+
+                updatePriceSummaries();
+            }
+        }
+
+        // Keyup functionality for purchase price - REAL-TIME UPDATES
         if (purchasePriceInput && sellingPriceInput && mrpInput) {
+            // Track initial values
+            let initialPurchasePrice = parseFloat(purchasePriceInput.value) || 0;
+            let initialSellingPrice = parseFloat(sellingPriceInput.value) || 0;
+
             purchasePriceInput.addEventListener('input', function() {
-                const purchasePrice = parseFloat(this.value);
-                if (!isNaN(purchasePrice) && purchasePrice > 0) {
-                    // Auto-set selling price as 120% of purchase price if empty or too low
-                    const currentSelling = parseFloat(sellingPriceInput.value) || 0;
-                    const suggestedSelling = purchasePrice * 1.2;
-                    if (currentSelling === 0 || currentSelling < suggestedSelling) {
-                        sellingPriceInput.value = suggestedSelling.toFixed(2);
-                    }
+                const currentValue = parseFloat(this.value) || 0;
 
-                    // Auto-set MRP as 130% of purchase price if empty or too low
-                    const currentMRP = parseFloat(mrpInput.value) || 0;
-                    const suggestedMRP = purchasePrice * 1.3;
-                    if (currentMRP === 0 || currentMRP < suggestedMRP) {
-                        mrpInput.value = suggestedMRP.toFixed(2);
-                    }
-
-                    updatePriceSummaries();
+                // If this is the first time entering purchase price, enable auto-update
+                if (initialPurchasePrice === 0 && currentValue > 0) {
+                    initialPurchasePrice = currentValue;
+                    autoUpdateEnabled = true;
+                    updateSellingAndMRPFromPurchase();
+                }
+                // If purchase price is being changed from existing value
+                else if (autoUpdateEnabled) {
+                    updateSellingAndMRPFromPurchase();
                 }
             });
 
-            sellingPriceInput.addEventListener('input', updatePriceSummaries);
+            purchasePriceInput.addEventListener('keyup', function() {
+                if (autoUpdateEnabled) {
+                    updateSellingAndMRPFromPurchase();
+                }
+            });
+
+            purchasePriceInput.addEventListener('change', function() {
+                if (autoUpdateEnabled) {
+                    updateSellingAndMRPFromPurchase();
+                }
+            });
+
+            // When user manually edits selling price, disable auto-update for that session
+            sellingPriceInput.addEventListener('input', function() {
+                const currentSelling = parseFloat(this.value) || 0;
+                const purchasePrice = parseFloat(purchasePriceInput.value) || 0;
+
+                if (purchasePrice > 0) {
+                    // If selling price is manually changed, disable auto-update
+                    autoUpdateEnabled = false;
+
+                    // Calculate expected selling price
+                    const unitsPerPacket = parseFloat(unitsPerPacketInput.value) || 1;
+                    const packetsPerBox = parseFloat(packetsPerBoxInput.value) || 1;
+
+                    let unitPrice = purchasePrice;
+                    if (priceCalculationBasis === 'packet') {
+                        unitPrice = purchasePrice / unitsPerPacket;
+                    } else if (priceCalculationBasis === 'box') {
+                        unitPrice = purchasePrice / (unitsPerPacket * packetsPerBox);
+                    }
+
+                    const expectedSellingUnit = unitPrice * 1.2;
+                    let expectedSelling = expectedSellingUnit;
+
+                    if (priceCalculationBasis === 'packet') {
+                        expectedSelling = expectedSellingUnit * unitsPerPacket;
+                    } else if (priceCalculationBasis === 'box') {
+                        expectedSelling = expectedSellingUnit * unitsPerPacket * packetsPerBox;
+                    }
+
+                    // If user manually sets selling price back to expected value, re-enable auto-update
+                    if (Math.abs(currentSelling - expectedSelling) < 0.01) {
+                        autoUpdateEnabled = true;
+                    }
+                }
+
+                updatePriceSummaries();
+            });
+
+            sellingPriceInput.addEventListener('change', updatePriceSummaries);
             mrpInput.addEventListener('input', updatePriceSummaries);
+            mrpInput.addEventListener('change', updatePriceSummaries);
+
+            // Also listen to quantity changes to update breakdown
+            if (unitsPerPacketInput && quantityInput && packetsPerBoxInput) {
+                unitsPerPacketInput.addEventListener('input', function() {
+                    calculateTotalPackets();
+                    if (autoUpdateEnabled) {
+                        updateSellingAndMRPFromPurchase();
+                    } else {
+                        updatePriceSummaries();
+                    }
+                });
+
+                packetsPerBoxInput.addEventListener('input', function() {
+                    if (autoUpdateEnabled) {
+                        updateSellingAndMRPFromPurchase();
+                    } else {
+                        updatePriceSummaries();
+                    }
+                });
+            }
 
             // Initial update
             updatePriceSummaries();
+
+            // If purchase price already has value on page load, enable auto-update
+            if (parseFloat(purchasePriceInput.value) > 0) {
+                initialPurchasePrice = parseFloat(purchasePriceInput.value);
+                autoUpdateEnabled = true;
+            }
         }
 
         // Validate expiry date is after received date
@@ -1117,6 +1574,7 @@ if (isset($_POST['submit'])) {
                 document.querySelector('form').reset();
                 clearMedicineSelection();
                 batchExplanation.classList.add('hidden');
+                autoUpdateEnabled = true; // Reset auto-update
                 updatePriceSummaries();
                 calculateTotalPackets();
             }
@@ -1297,6 +1755,34 @@ if (isset($_POST['submit'])) {
             if (e.altKey && e.key === 'r') {
                 e.preventDefault();
                 clearBatchNumber();
+            }
+
+            // Alt + 1 for per unit pricing
+            if (e.altKey && e.key === '1') {
+                e.preventDefault();
+                setPriceCalculationBasis('unit');
+            }
+
+            // Alt + 2 for per packet pricing
+            if (e.altKey && e.key === '2') {
+                e.preventDefault();
+                setPriceCalculationBasis('packet');
+            }
+
+            // Alt + 3 for per box pricing
+            if (e.altKey && e.key === '3') {
+                e.preventDefault();
+                setPriceCalculationBasis('box');
+            }
+
+            // Alt + A to enable/disable auto-update
+            if (e.altKey && e.key === 'a') {
+                e.preventDefault();
+                autoUpdateEnabled = !autoUpdateEnabled;
+                showNotification(`Auto-update ${autoUpdateEnabled ? 'enabled' : 'disabled'}`, 'info');
+                if (autoUpdateEnabled) {
+                    updateSellingAndMRPFromPurchase();
+                }
             }
         });
     </script>

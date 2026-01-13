@@ -69,16 +69,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $category_id = intval($_POST['category_id'] ?? 0);
         $type_id = intval($_POST['type_id'] ?? 0);
         $description = trim($_POST['description'] ?? '');
-        
+
         // Stock details
         $add_stock = isset($_POST['add_stock']) ? 1 : 0;
         $batch_no = trim($_POST['batch_no'] ?? '');
         $quantity = intval($_POST['quantity'] ?? 0);
         $units_per_packet = intval($_POST['units_per_packet'] ?? 1);
         $packets_per_box = intval($_POST['packets_per_box'] ?? 1);
-        $purchase_price = floatval($_POST['purchase_price'] ?? 0);
-        $selling_price = floatval($_POST['selling_price'] ?? 0);
-        $mrp = floatval($_POST['mrp'] ?? 0);
+        $purchase_price = isset($_POST['purchase_price']) ? floatval($_POST['purchase_price']) : 0.00;
+        $selling_price = isset($_POST['selling_price']) ? floatval($_POST['selling_price']) : 0.00;
+        $mrp = isset($_POST['mrp']) ? floatval($_POST['mrp']) : 0.00;
         $supplier_id = intval($_POST['supplier_id'] ?? 0);
         $received_date = $_POST['received_date'] ?? date('Y-m-d');
         $expiry_date = $_POST['expiry_date'] ?? '';
@@ -88,85 +88,132 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($name) || empty($generic_id) || empty($category_id) || empty($type_id)) {
             $error = "Please fill in all required fields.";
         } else {
-            // Start transaction
-            mysqli_begin_transaction($conn);
-            
-            try {
-                // Insert medicine
-                $stmt = $conn->prepare("
-                    INSERT INTO medicines (name, generic_id, category_id, type_id, description, created_at)
-                    VALUES (?, ?, ?, ?, ?, NOW())
-                ");
+            // Check if medicine already exists
+            $check_stmt = $conn->prepare("SELECT id FROM medicines WHERE name = ? AND generic_id = ?");
+            $check_stmt->bind_param('si', $name, $generic_id);
+            $check_stmt->execute();
+            $check_stmt->store_result();
 
-                if ($stmt) {
-                    $stmt->bind_param('siiis', $name, $generic_id, $category_id, $type_id, $description);
+            if ($check_stmt->num_rows > 0) {
+                $error = "This medicine (with the same generic) already exists in the database.";
+                $check_stmt->close();
+            } else {
+                $check_stmt->close();
 
-                    if ($stmt->execute()) {
-                        $new_medicine_id = $stmt->insert_id;
-                        $success = true;
-                        
-                        // If stock should be added
-                        if ($add_stock && !empty($batch_no) && $quantity > 0 && !empty($expiry_date)) {
-                            // Validate stock fields
-                            if ($selling_price <= 0 || $mrp <= 0) {
-                                throw new Exception("Selling price and MRP must be greater than 0.");
-                            }
-                            
-                            if ($expiry_date <= date('Y-m-d')) {
-                                throw new Exception("Expiry date must be in the future.");
-                            }
-                            
-                            // Insert stock batch
-                            $stock_stmt = $conn->prepare("
-                                INSERT INTO stock_batches (
-                                    medicine_id, batch_no, quantity, units_per_packet, packets_per_box,
-                                    purchase_price, selling_price, mrp, supplier_id, received_date,
-                                    expiry_date, location, is_expired, added_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())
-                            ");
-                            
-                            if ($stock_stmt) {
-                                $stock_stmt->bind_param(
-                                    'isiiidddissss',
-                                    $new_medicine_id,
-                                    $batch_no,
-                                    $quantity,
-                                    $units_per_packet,
-                                    $packets_per_box,
-                                    $purchase_price,
-                                    $selling_price,
-                                    $mrp,
-                                    $supplier_id,
-                                    $received_date,
-                                    $expiry_date,
-                                    $location
-                                );
-                                
-                                if (!$stock_stmt->execute()) {
-                                    throw new Exception("Failed to add stock: " . $stock_stmt->error);
+                // Start transaction
+                mysqli_begin_transaction($conn);
+
+                try {
+                    // Insert medicine
+                    $stmt = $conn->prepare("
+                        INSERT INTO medicines (name, generic_id, category_id, type_id, description, created_at)
+                        VALUES (?, ?, ?, ?, ?, NOW())
+                    ");
+
+                    if ($stmt) {
+                        $stmt->bind_param('siiis', $name, $generic_id, $category_id, $type_id, $description);
+
+                        if ($stmt->execute()) {
+                            $new_medicine_id = $stmt->insert_id;
+                            $success = true;
+
+                            // If stock should be added
+                            if ($add_stock && !empty($batch_no) && $quantity > 0 && !empty($expiry_date)) {
+                                // Validate stock fields
+                                if ($purchase_price < 0) {
+                                    throw new Exception("Purchase price cannot be negative.");
                                 }
-                                $stock_stmt->close();
-                            } else {
-                                throw new Exception("Failed to prepare stock statement.");
+
+                                if ($selling_price <= 0) {
+                                    throw new Exception("Selling price must be greater than 0.");
+                                }
+
+                                if ($mrp <= 0) {
+                                    throw new Exception("MRP must be greater than 0.");
+                                }
+
+                                if ($selling_price < $purchase_price) {
+                                    throw new Exception("Selling price should not be less than purchase price.");
+                                }
+
+                                if ($mrp < $selling_price) {
+                                    throw new Exception("MRP should not be less than selling price.");
+                                }
+
+                                if ($expiry_date <= date('Y-m-d')) {
+                                    throw new Exception("Expiry date must be in the future.");
+                                }
+
+                                // Check if batch number already exists
+                                $batch_check = $conn->prepare("SELECT id FROM stock_batches WHERE batch_no = ?");
+                                $batch_check->bind_param('s', $batch_no);
+                                $batch_check->execute();
+                                $batch_check->store_result();
+
+                                if ($batch_check->num_rows > 0) {
+                                    $batch_check->close();
+                                    throw new Exception("Batch number already exists. Please use a different batch number.");
+                                }
+                                $batch_check->close();
+
+                                // Insert stock batch - FIXED TYPE STRING
+                                $stock_stmt = $conn->prepare("
+                                    INSERT INTO stock_batches (
+                                        medicine_id, batch_no, quantity, units_per_packet, packets_per_box,
+                                        purchase_price, selling_price, mrp, supplier_id, received_date,
+                                        expiry_date, location, is_expired, added_at
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())
+                                ");
+
+                                if ($stock_stmt) {
+                                    // CORRECTED: Type string should have 12 characters for 12 parameters
+                                    // i=medicine_id, s=batch_no, i=quantity, i=units_per_packet, i=packets_per_box
+                                    // d=purchase_price, d=selling_price, d=mrp, i=supplier_id
+                                    // s=received_date, s=expiry_date, s=location
+                                    // Total: 12 characters
+                                    $stock_stmt->bind_param(
+                                        'isiiidddisss',   // ✅ FIXED: 12 types for 12 variables
+                                        $new_medicine_id,
+                                        $batch_no,
+                                        $quantity,
+                                        $units_per_packet,
+                                        $packets_per_box,
+                                        $purchase_price,
+                                        $selling_price,
+                                        $mrp,
+                                        $supplier_id,
+                                        $received_date,
+                                        $expiry_date,
+                                        $location
+                                    );
+
+
+                                    if (!$stock_stmt->execute()) {
+                                        throw new Exception("Failed to add stock: " . $stock_stmt->error);
+                                    }
+                                    $stock_stmt->close();
+                                } else {
+                                    throw new Exception("Failed to prepare stock statement: " . $conn->error);
+                                }
                             }
+
+                            // Commit transaction
+                            mysqli_commit($conn);
+
+                            header("Location: add_medicine.php?success=1&medicine_id=" . $new_medicine_id . "&stock_added=" . ($add_stock ? '1' : '0'));
+                            exit;
+                        } else {
+                            throw new Exception("Database error: " . $stmt->error);
                         }
-                        
-                        // Commit transaction
-                        mysqli_commit($conn);
-                        
-                        header("Location: add_medicine.php?success=1&medicine_id=" . $new_medicine_id . "&stock_added=" . ($add_stock ? '1' : '0'));
-                        exit;
+                        $stmt->close();
                     } else {
-                        throw new Exception("Database error: " . $stmt->error);
+                        throw new Exception("Failed to prepare statement: " . $conn->error);
                     }
-                    $stmt->close();
-                } else {
-                    throw new Exception("Failed to prepare statement: " . $conn->error);
+                } catch (Exception $e) {
+                    // Rollback transaction on error
+                    mysqli_rollback($conn);
+                    $error = $e->getMessage();
                 }
-            } catch (Exception $e) {
-                // Rollback transaction on error
-                mysqli_rollback($conn);
-                $error = $e->getMessage();
             }
         }
     }
@@ -183,11 +230,7 @@ if (isset($_GET['success']) && $_GET['success'] == 1) {
 $categories = mysqli_query($conn, "SELECT * FROM medicine_categories ORDER BY name");
 $types = mysqli_query($conn, "SELECT * FROM medicine_types ORDER BY name");
 $generics = mysqli_query($conn, "SELECT id, name FROM medicine_generics ORDER BY name");
-// Option 1: Just fetch all suppliers
 $suppliers = mysqli_query($conn, "SELECT id, name FROM suppliers ORDER BY name");
-
-// Option 2: If your table has an 'is_active' column (or similar) for active suppliers
-// $suppliers = mysqli_query($conn, "SELECT id, name FROM suppliers WHERE is_active = 1 ORDER BY name");
 
 // Store data for JavaScript
 $category_data = [];
@@ -404,11 +447,11 @@ mysqli_data_seek($suppliers, 0);
             border-radius: 50%;
         }
 
-        input:checked + .toggle-slider {
+        input:checked+.toggle-slider {
             background-color: #10b981;
         }
 
-        input:checked + .toggle-slider:before {
+        input:checked+.toggle-slider:before {
             transform: translateX(30px);
         }
 
@@ -526,8 +569,13 @@ mysqli_data_seek($suppliers, 0);
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .price-change-animation {
@@ -535,11 +583,19 @@ mysqli_data_seek($suppliers, 0);
         }
 
         @keyframes priceChange {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            100% {
+                transform: scale(1);
+            }
         }
-        
+
         .auto-calc-badge {
             position: absolute;
             top: -8px;
@@ -986,20 +1042,16 @@ mysqli_data_seek($suppliers, 0);
                                             </div>
                                             <div class="price-value text-gray-800" id="purchasePriceDisplay">Rs0.00</div>
                                             <div class="flex items-center justify-between mt-2">
-                                                <input type="hidden" name="purchase_price" id="purchase_price" value="0">
-                                                <button type="button" onclick="decreasePrice('purchase')" class="w-8 h-8 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
                                                 <input type="number"
+                                                    name="purchase_price"
                                                     id="purchase_price_input"
                                                     min="0"
                                                     step="0.01"
                                                     class="w-24 text-center px-2 py-1 border border-gray-300 rounded bg-white text-gray-800 font-medium"
                                                     placeholder="0.00"
-                                                    onkeyup="updatePrice('purchase', this.value)">
-                                                <button type="button" onclick="increasePrice('purchase')" class="w-8 h-8 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
+                                                    onchange="updatePrice('purchase', this.value)"
+                                                    onkeyup="updatePrice('purchase', this.value)"
+                                                    value="<?php echo isset($_POST['purchase_price']) ? htmlspecialchars($_POST['purchase_price']) : '15.00'; ?>">
                                             </div>
                                             <div class="mt-2 text-xs text-gray-500 text-center">
                                                 <i class="fas fa-calculator mr-1"></i>
@@ -1016,20 +1068,15 @@ mysqli_data_seek($suppliers, 0);
                                             </div>
                                             <div class="price-value text-green-800" id="sellingPriceDisplay">Rs0.00</div>
                                             <div class="flex items-center justify-between mt-2">
-                                                <input type="hidden" name="selling_price" id="selling_price" value="0">
-                                                <button type="button" onclick="decreasePrice('selling')" class="w-8 h-8 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
                                                 <input type="number"
+                                                    name="selling_price"
                                                     id="selling_price_input"
                                                     min="0"
                                                     step="0.01"
                                                     class="w-24 text-center px-2 py-1 border border-green-300 rounded bg-white text-green-800 font-medium"
                                                     placeholder="0.00"
-                                                    onkeyup="updatePrice('selling', this.value)">
-                                                <button type="button" onclick="increasePrice('selling')" class="w-8 h-8 bg-green-100 text-green-700 rounded-full hover:bg-green-200 transition-colors">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
+                                                    onkeyup="updatePrice('selling', this.value)"
+                                                    value="<?php echo isset($_POST['selling_price']) ? htmlspecialchars($_POST['selling_price']) : ''; ?>">
                                             </div>
                                             <div class="mt-2 text-xs text-green-600 text-center">
                                                 <i class="fas fa-percentage mr-1"></i>
@@ -1046,20 +1093,15 @@ mysqli_data_seek($suppliers, 0);
                                             </div>
                                             <div class="price-value text-yellow-800" id="mrpDisplay">Rs0.00</div>
                                             <div class="flex items-center justify-between mt-2">
-                                                <input type="hidden" name="mrp" id="mrp" value="0">
-                                                <button type="button" onclick="decreasePrice('mrp')" class="w-8 h-8 bg-yellow-100 text-yellow-700 rounded-full hover:bg-yellow-200 transition-colors">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
                                                 <input type="number"
+                                                    name="mrp"
                                                     id="mrp_input"
                                                     min="0"
                                                     step="0.01"
                                                     class="w-24 text-center px-2 py-1 border border-yellow-300 rounded bg-white text-yellow-800 font-medium"
                                                     placeholder="0.00"
-                                                    onkeyup="updatePrice('mrp', this.value)">
-                                                <button type="button" onclick="increasePrice('mrp')" class="w-8 h-8 bg-yellow-100 text-yellow-700 rounded-full hover:bg-yellow-200 transition-colors">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
+                                                    onkeyup="updatePrice('mrp', this.value)"
+                                                    value="<?php echo isset($_POST['mrp']) ? htmlspecialchars($_POST['mrp']) : ''; ?>">
                                             </div>
                                             <div class="mt-2 text-xs text-yellow-600 text-center">
                                                 <i class="fas fa-percentage mr-1"></i>
@@ -1316,9 +1358,9 @@ mysqli_data_seek($suppliers, 0);
 
         // Price calculation settings
         const PRICE_SETTINGS = {
-            markupPercentage: 33.33,    // 33.33% markup from purchase to selling (1/3 markup)
-            discountPercentage: 20,     // 20% discount from MRP to selling
-            gstPercentage: 12          // 12% GST included in MRP
+            markupPercentage: 33.33,
+            discountPercentage: 20,
+            gstPercentage: 12
         };
 
         // Track if prices are being auto-calculated
@@ -1412,14 +1454,13 @@ mysqli_data_seek($suppliers, 0);
         // Calculate selling price and MRP based on purchase price
         function calculateDerivedPrices(purchasePrice) {
             const purchase = parseFloat(purchasePrice) || 0;
-            
+
             // Calculate selling price: purchase + 33.33% markup
             const sellingPrice = purchase + (purchase * (PRICE_SETTINGS.markupPercentage / 100));
-            
+
             // Calculate MRP: selling price with 12% GST included
-            // Formula: MRP = Selling Price * (1 + GST/100)
             const mrp = sellingPrice * (1 + (PRICE_SETTINGS.gstPercentage / 100));
-            
+
             return {
                 sellingPrice: parseFloat(sellingPrice.toFixed(2)),
                 mrp: parseFloat(mrp.toFixed(2))
@@ -1430,34 +1471,30 @@ mysqli_data_seek($suppliers, 0);
         function updatePrice(type, value) {
             const price = parseFloat(value) || 0;
             const displayElement = document.getElementById(type + 'PriceDisplay');
-            const hiddenElement = document.getElementById(type + '_price');
             const inputElement = document.getElementById(type + '_price_input');
-            
-            hiddenElement.value = price;
+
             displayElement.textContent = 'Rs' + price.toFixed(2);
             inputElement.value = price.toFixed(2);
-            
+
             // Animate price change
             displayElement.classList.add('price-change-animation');
             setTimeout(() => {
                 displayElement.classList.remove('price-change-animation');
             }, 500);
-            
+
             // If purchase price changes, auto-calculate selling and MRP
             if (type === 'purchase' && !isAutoCalculating) {
                 isAutoCalculating = true;
                 const derivedPrices = calculateDerivedPrices(price);
-                
+
                 // Update selling price
-                document.getElementById('selling_price').value = derivedPrices.sellingPrice;
                 document.getElementById('sellingPriceDisplay').textContent = 'Rs' + derivedPrices.sellingPrice.toFixed(2);
                 document.getElementById('selling_price_input').value = derivedPrices.sellingPrice.toFixed(2);
-                
+
                 // Update MRP
-                document.getElementById('mrp').value = derivedPrices.mrp;
                 document.getElementById('mrpDisplay').textContent = 'Rs' + derivedPrices.mrp.toFixed(2);
                 document.getElementById('mrp_input').value = derivedPrices.mrp.toFixed(2);
-                
+
                 // Animate the calculated prices
                 ['sellingPriceDisplay', 'mrpDisplay'].forEach(id => {
                     document.getElementById(id).classList.add('price-change-animation');
@@ -1465,46 +1502,20 @@ mysqli_data_seek($suppliers, 0);
                         document.getElementById(id).classList.remove('price-change-animation');
                     }, 500);
                 });
-                
+
                 isAutoCalculating = false;
             }
-            
+
             // Update calculations
             calculatePriceSummary();
             calculateStockSummary();
         }
 
-        function increasePrice(type) {
-            const inputElement = document.getElementById(type + '_price_input');
-            let currentValue = parseFloat(inputElement.value) || 0;
-            
-            // Different increment based on price type
-            let increment = 1;
-            if (type === 'selling') increment = 2;
-            if (type === 'mrp') increment = 5;
-            
-            currentValue += increment;
-            updatePrice(type, currentValue);
-        }
-
-        function decreasePrice(type) {
-            const inputElement = document.getElementById(type + '_price_input');
-            let currentValue = parseFloat(inputElement.value) || 0;
-            
-            // Different decrement based on price type
-            let decrement = 1;
-            if (type === 'selling') decrement = 2;
-            if (type === 'mrp') decrement = 5;
-            
-            currentValue = Math.max(0, currentValue - decrement);
-            updatePrice(type, currentValue);
-        }
-
         // Calculate price summary
         function calculatePriceSummary() {
-            const purchasePrice = parseFloat(document.getElementById('purchase_price').value) || 0;
-            const sellingPrice = parseFloat(document.getElementById('selling_price').value) || 0;
-            const mrp = parseFloat(document.getElementById('mrp').value) || 0;
+            const purchasePrice = parseFloat(document.getElementById('purchase_price_input').value) || 0;
+            const sellingPrice = parseFloat(document.getElementById('selling_price_input').value) || 0;
+            const mrp = parseFloat(document.getElementById('mrp_input').value) || 0;
             const quantity = parseInt(document.getElementById('quantity').value) || 0;
 
             // Calculate markup
@@ -1547,9 +1558,9 @@ mysqli_data_seek($suppliers, 0);
             const quantity = parseInt(document.getElementById('quantity').value) || 0;
             const unitsPerPacket = parseInt(document.getElementById('units_per_packet').value) || 10;
             const packetsPerBox = parseInt(document.getElementById('packets_per_box').value) || 10;
-            const purchasePrice = parseFloat(document.getElementById('purchase_price').value) || 0;
-            const sellingPrice = parseFloat(document.getElementById('selling_price').value) || 0;
-            
+            const purchasePrice = parseFloat(document.getElementById('purchase_price_input').value) || 0;
+            const sellingPrice = parseFloat(document.getElementById('selling_price_input').value) || 0;
+
             const totalPackets = quantity * packetsPerBox;
             const totalUnits = totalPackets * unitsPerPacket;
             const totalCost = quantity * purchasePrice;
@@ -1572,7 +1583,7 @@ mysqli_data_seek($suppliers, 0);
         // Generate batch number
         function generateBatchNumber() {
             const medicineName = document.getElementById('medicine_name').value;
-            
+
             if (!medicineName || medicineName.length < 3) {
                 alert('Please enter a medicine name (at least 3 characters) to generate batch number.');
                 return;
@@ -1580,42 +1591,43 @@ mysqli_data_seek($suppliers, 0);
 
             const generateBtn = document.querySelector('button[onclick="generateBatchNumber()"]');
             const originalHtml = generateBtn.innerHTML;
-            
+
             // Show loading state
             generateBtn.innerHTML = '<div class="loading-spinner"></div>';
             generateBtn.disabled = true;
 
             // Get first 3 letters of medicine name (uppercase)
             const prefix = medicineName.substring(0, 3).toUpperCase();
-            
+
             // Get current month and year (MMYY format)
             const now = new Date();
             const month = (now.getMonth() + 1).toString().padStart(2, '0');
             const year = now.getFullYear().toString().substring(2);
             const date_part = month + year;
-            
+
             // For new medicine, always start with 001
             const sequence = '001';
-            
+
             const batchNo = `${prefix}-${date_part}-${sequence}`;
-            
+
             // Update batch number field
             document.getElementById('batch_no').value = batchNo;
-            
+
             // Update batch info display
             const batchInfo = document.getElementById('batchInfo');
             document.getElementById('batchFormat').textContent = 'ABC-YYMM-001';
             document.getElementById('batchPrefix').textContent = prefix + ' (First 3 letters)';
-            
+
             // Get month name
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                               'July', 'August', 'September', 'October', 'November', 'December'];
+            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December'
+            ];
             const monthName = monthNames[parseInt(month) - 1];
             document.getElementById('batchDate').textContent = `${monthName} 20${year}`;
             document.getElementById('batchSequence').textContent = sequence + ' (First batch)';
-            
+
             batchInfo.classList.remove('hidden');
-            
+
             // Update batch example
             document.getElementById('batchExample').textContent = batchNo;
             document.getElementById('examplePrefix').textContent = prefix;
@@ -1633,25 +1645,18 @@ mysqli_data_seek($suppliers, 0);
         function toggleStockSection() {
             const addStock = document.getElementById('add_stock');
             const stockSection = document.getElementById('stockSection');
-            const stockStatus = document.getElementById('stockStatus');
-            
+
             if (addStock.checked) {
                 stockSection.classList.remove('disabled');
-                stockStatus.textContent = 'Yes';
-                stockStatus.className = 'text-xs font-medium text-green-600';
-                
                 // Enable required fields
-                ['batch_no', 'quantity', 'purchase_price_input', 'selling_price_input', 'mrp_input', 'expiry_date'].forEach(id => {
+                ['batch_no', 'quantity', 'purchase_price_input', 'expiry_date'].forEach(id => {
                     const field = document.getElementById(id);
                     if (field) field.required = true;
                 });
             } else {
                 stockSection.classList.add('disabled');
-                stockStatus.textContent = 'No';
-                stockStatus.className = 'text-xs font-medium text-red-600';
-                
                 // Disable required fields
-                ['batch_no', 'quantity', 'purchase_price_input', 'selling_price_input', 'mrp_input', 'expiry_date'].forEach(id => {
+                ['batch_no', 'quantity', 'purchase_price_input', 'expiry_date'].forEach(id => {
                     const field = document.getElementById(id);
                     if (field) field.required = false;
                 });
@@ -1666,77 +1671,72 @@ mysqli_data_seek($suppliers, 0);
                 document.getElementById('category_id'),
                 document.getElementById('type_id')
             ];
-            
+
             let filled = 0;
             requiredFields.forEach(field => {
                 if (field && field.value.trim() !== '') filled++;
             });
-            
+
             const total = requiredFields.length;
             const progress = (filled / total) * 100;
-            const progressBar = document.getElementById('progressBar');
             const requiredCount = document.getElementById('requiredCount');
-            
-            progressBar.style.width = `${progress}%`;
+
             requiredCount.textContent = `${filled}/${total}`;
-            
-            progressBar.className = 'h-2 rounded-full ' +
-                (progress === 100 ? 'bg-green-500' : progress >= 50 ? 'bg-yellow-500' : 'bg-red-500');
         }
 
         // Form validation
         function validateForm() {
             const form = document.getElementById('medicineForm');
             const addStock = document.getElementById('add_stock').checked;
-            
+
             if (addStock) {
                 const quantity = parseInt(document.getElementById('quantity').value) || 0;
-                const sellingPrice = parseFloat(document.getElementById('selling_price').value) || 0;
-                const mrp = parseFloat(document.getElementById('mrp').value) || 0;
+                const sellingPrice = parseFloat(document.getElementById('selling_price_input').value) || 0;
+                const mrp = parseFloat(document.getElementById('mrp_input').value) || 0;
                 const expiryDate = document.getElementById('expiry_date').value;
-                const purchasePrice = parseFloat(document.getElementById('purchase_price').value) || 0;
-                
+                const purchasePrice = parseFloat(document.getElementById('purchase_price_input').value) || 0;
+
                 if (quantity <= 0) {
                     alert('Quantity must be greater than 0 when adding stock.');
                     return false;
                 }
-                
+
                 if (purchasePrice < 0) {
                     alert('Purchase price cannot be negative.');
                     return false;
                 }
-                
+
                 if (sellingPrice <= 0) {
                     alert('Selling price must be greater than 0.');
                     return false;
                 }
-                
+
                 if (mrp <= 0) {
                     alert('MRP must be greater than 0.');
                     return false;
                 }
-                
+
                 if (sellingPrice < purchasePrice) {
                     alert('Selling price should not be less than purchase price.');
                     return false;
                 }
-                
+
                 if (mrp < sellingPrice) {
                     alert('MRP should not be less than selling price.');
                     return false;
                 }
-                
+
                 if (!expiryDate) {
                     alert('Please select an expiry date.');
                     return false;
                 }
-                
+
                 if (new Date(expiryDate) <= new Date()) {
                     alert('Expiry date must be in the future.');
                     return false;
                 }
             }
-            
+
             return true;
         }
 
@@ -1786,7 +1786,7 @@ mysqli_data_seek($suppliers, 0);
             // Update progress on input
             const form = document.getElementById('medicineForm');
             form.addEventListener('input', updateProgress);
-            
+
             // Also update when hidden inputs change
             document.getElementById('generic_id').addEventListener('change', updateProgress);
             document.getElementById('category_id').addEventListener('change', updateProgress);
@@ -1794,13 +1794,14 @@ mysqli_data_seek($suppliers, 0);
 
             // Initial progress check
             updateProgress();
-            
+
             // Initial calculations
             calculateStockSummary();
             calculatePriceSummary();
 
             // Auto-save form data
             let autoSaveTimer;
+
             function saveFormData() {
                 const formData = new FormData(form);
                 const data = Object.fromEntries(formData.entries());
@@ -1857,7 +1858,7 @@ mysqli_data_seek($suppliers, 0);
                     e.preventDefault();
                     return false;
                 }
-                
+
                 // Clear saved draft on successful submit
                 localStorage.removeItem('medicineFormDraft');
                 return true;
@@ -1867,7 +1868,7 @@ mysqli_data_seek($suppliers, 0);
             window.resetForm = function() {
                 if (confirm('Are you sure you want to reset the form? All entered data will be lost.')) {
                     form.reset();
-                    
+
                     // Clear search inputs and hidden fields
                     ['generic_search', 'category_search', 'type_search'].forEach(id => {
                         document.getElementById(id).value = '';
@@ -1875,27 +1876,27 @@ mysqli_data_seek($suppliers, 0);
                     ['generic_id', 'category_id', 'type_id'].forEach(id => {
                         document.getElementById(id).value = '';
                     });
-                    
+
                     // Reset stock section
                     document.getElementById('add_stock').checked = true;
                     toggleStockSection();
-                    
+
                     // Reset dates
                     document.getElementById('received_date').value = new Date().toISOString().split('T')[0];
                     const oneYearLater = new Date();
                     oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
                     document.getElementById('expiry_date').value = oneYearLater.toISOString().split('T')[0];
-                    
+
                     // Reset defaults
                     document.getElementById('units_per_packet').value = '10';
                     document.getElementById('packets_per_box').value = '10';
                     document.getElementById('quantity').value = '0';
-                    
+
                     // Reset prices
                     const resetPurchasePrice = 15.00;
                     document.getElementById('purchase_price_input').value = resetPurchasePrice.toFixed(2);
                     updatePrice('purchase', resetPurchasePrice);
-                    
+
                     localStorage.removeItem('medicineFormDraft');
                     updateProgress();
                     calculateStockSummary();
@@ -1912,4 +1913,5 @@ mysqli_data_seek($suppliers, 0);
         });
     </script>
 </body>
+
 </html>
