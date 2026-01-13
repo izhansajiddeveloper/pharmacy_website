@@ -54,7 +54,7 @@ Admin panel to manage users, payments, expenses, and overall analytics.
  📄 Report / Analytics Page
 Shows sales, stock, and return reports with filters and summaries for pharmacists and admins.
 
-![Report Page]()
+![Report Page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/aa0b2d40a57e5e0115a7d9eb313f1b121b20e4ca/reports.png)
 
 
 
