@@ -22,7 +22,7 @@ Dashboard for pharmacists to access sales, stock, and medicine management.
 🔎 Search Medicine by Brand
 
 Allows searching medicines based on brand name for quick access.
-
+![seacrh by brand](https://github.com/izhansajiddeveloper/pharmacy_website/blob/bcd33b1c41c90e74408215968dadc5b3d0373118/brand%20search.png)
 
 🔎 Search Medicine by Generic Name
 
