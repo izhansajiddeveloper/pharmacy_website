@@ -27,7 +27,7 @@ Allows searching medicines based on brand name for quick access.
 🔎 Search Medicine by Generic Name
 
 Search medicines using generic names for accurate identification.
-
+![search by genric name](https://github.com/izhansajiddeveloper/pharmacy_website/blob/91a3e026a4f6906d6d4d1dcc2f5463b0607a2ebd/genric%20search.png)
 
 📦 Stock Management
 
