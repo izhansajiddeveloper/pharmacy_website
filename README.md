@@ -10,7 +10,7 @@ Main landing page showing the pharmacy system overview and navigation.
 
 
 🔐 Login / Authentication
-
+![login page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/0f8ee5a9334bbe3cbc07fc296f8b6341775678fc/login.png)
 Secure login page for pharmacists and admin users.
 
 
