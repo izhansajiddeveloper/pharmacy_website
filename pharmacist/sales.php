@@ -10,54 +10,108 @@ if ($_SESSION['role'] !== 'pharmacist') {
 
 $pharmacist_id = $_SESSION['user_id'];
 
-// Fetch pharmacist's sales
+// Get filter parameters
+$sale_type = isset($_GET['type']) ? $_GET['type'] : 'all'; // 'all', 'regular', 'wholesale'
+$date_filter = isset($_GET['date']) ? $_GET['date'] : '';
+$search_query = isset($_GET['search']) ? mysqli_real_escape_string($conn, $_GET['search']) : '';
+
+// Build base query
 $query = "SELECT s.*, 
+                 i.customer_name,
                  COUNT(si.id) as items_count,
                  SUM(si.quantity) as total_quantity
           FROM sales s
+          JOIN invoices i ON s.id = i.sale_id
           LEFT JOIN sale_items si ON s.id = si.sale_id
-          WHERE s.pharmacist_id = $pharmacist_id
-          GROUP BY s.id
-          ORDER BY s.sale_date DESC";
+          WHERE s.pharmacist_id = $pharmacist_id";
+
+// Add filters
+if ($sale_type === 'regular') {
+    $query .= " AND i.customer_name = 'Regular Customer'";
+} elseif ($sale_type === 'wholesale') {
+    $query .= " AND i.customer_name != 'Regular Customer'";
+}
+
+if (!empty($search_query)) {
+    $query .= " AND (s.invoice_no LIKE '%$search_query%' OR i.customer_name LIKE '%$search_query%')";
+}
+
+if (!empty($date_filter)) {
+    $query .= " AND DATE(s.sale_date) = '$date_filter'";
+}
+
+$query .= " GROUP BY s.id ORDER BY s.sale_date DESC";
 
 $result = mysqli_query($conn, $query);
 $total_sales = mysqli_num_rows($result);
 
-// Get pharmacist's sales statistics
-$stats_query = mysqli_query(
+// Get total counts for each type
+$count_query = "SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN i.customer_name = 'Regular Customer' THEN 1 ELSE 0 END) as regular_count,
+    SUM(CASE WHEN i.customer_name != 'Regular Customer' THEN 1 ELSE 0 END) as wholesale_count
+    FROM sales s
+    JOIN invoices i ON s.id = i.sale_id
+    WHERE s.pharmacist_id = $pharmacist_id";
+
+$count_result = mysqli_query($conn, $count_query);
+$count_data = mysqli_fetch_assoc($count_result);
+
+$regular_stats_query = mysqli_query(
     $conn,
     "SELECT 
-        COUNT(*) as total_transactions,
-        SUM(total_amount) as total_revenue,
-        AVG(total_amount) as avg_sale_value,
-        SUM(discount) as total_discount,
-        COUNT(DISTINCT DATE(sale_date)) as sales_days,
-        SUM(CASE WHEN payment_method = 'Cash' THEN 1 ELSE 0 END) as cash_sales,
-        SUM(CASE WHEN payment_method = 'Online' THEN 1 ELSE 0 END) as online_sales
-     FROM sales
-     WHERE pharmacist_id = $pharmacist_id"
+        COUNT(*) AS regular_transactions,
+        SUM(s.total_amount) AS regular_revenue,
+        AVG(s.total_amount) AS regular_avg_sale_value,
+        SUM(s.discount) AS regular_total_discount
+     FROM sales s
+     JOIN invoices i ON s.id = i.sale_id
+     WHERE s.pharmacist_id = $pharmacist_id 
+     AND i.customer_name = 'Regular Customer'"
 );
-$stats = mysqli_fetch_assoc($stats_query);
+$regular_stats = mysqli_fetch_assoc($regular_stats_query);
+
+// Get pharmacist's sales statistics for wholesale sales
+$wholesale_stats_query = mysqli_query(
+    $conn,
+    "SELECT 
+        COUNT(*) AS wholesale_transactions,
+        SUM(s.total_amount) AS wholesale_revenue,
+        AVG(s.total_amount) AS wholesale_avg_sale_value,
+        SUM(s.discount) AS wholesale_total_discount
+     FROM sales s
+     JOIN invoices i ON s.id = i.sale_id
+     WHERE s.pharmacist_id = $pharmacist_id 
+     AND i.customer_name != 'Regular Customer'"
+);
+$wholesale_stats = mysqli_fetch_assoc($wholesale_stats_query);
+
 
 // Get today's sales
 $today_sales = mysqli_query(
     $conn,
-    "SELECT SUM(total_amount) as today_total, 
-            SUM(discount) as today_discount,
-            COUNT(*) as today_count
-     FROM sales 
-     WHERE pharmacist_id = $pharmacist_id 
-     AND DATE(sale_date) = CURDATE()"
+    "SELECT 
+        SUM(s.total_amount) AS today_total, 
+        SUM(s.discount) AS today_discount,
+        COUNT(*) AS today_count,
+        SUM(CASE WHEN i.customer_name = 'Regular Customer' THEN 1 ELSE 0 END) AS today_regular_count,
+        SUM(CASE WHEN i.customer_name != 'Regular Customer' THEN 1 ELSE 0 END) AS today_wholesale_count
+     FROM sales s
+     JOIN invoices i ON s.id = i.sale_id
+     WHERE s.pharmacist_id = $pharmacist_id 
+     AND DATE(s.sale_date) = CURDATE()"
 );
 $today = mysqli_fetch_assoc($today_sales);
+
 
 // Get recent sales
 $recent_sales = mysqli_query(
     $conn,
-    "SELECT *
-     FROM sales
-     WHERE pharmacist_id = $pharmacist_id
-     ORDER BY sale_date DESC
+    "SELECT s.*, i.customer_name
+     FROM sales s
+     JOIN invoices i ON s.id = i.sale_id
+     WHERE s.pharmacist_id = $pharmacist_id
+     ORDER BY s.sale_date DESC
      LIMIT 5"
 );
 
@@ -68,6 +122,7 @@ $top_medicines = mysqli_query(
      FROM sale_items si
      JOIN medicines m ON si.medicine_id = m.id
      JOIN sales s ON si.sale_id = s.id
+     JOIN invoices i ON s.id = i.sale_id
      WHERE s.pharmacist_id = $pharmacist_id
      GROUP BY m.id
      ORDER BY total_sold DESC
@@ -139,6 +194,10 @@ $top_medicines = mysqli_query(
             background: linear-gradient(135deg, var(--accent-green), #059669);
         }
 
+        .gradient-purple {
+            background: linear-gradient(135deg, var(--accent-purple), #7c3aed);
+        }
+
         .gradient-text {
             background: linear-gradient(45deg, #f59e0b, #d97706);
             background-clip: text;
@@ -207,23 +266,7 @@ $top_medicines = mysqli_query(
             z-index: -1;
         }
 
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0);
-            }
-
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-
-        .animate-float {
-            animation: float 3s ease-in-out infinite;
-        }
-
-        .badge-completed {
+        .badge-regular {
             background: linear-gradient(135deg, #10b981, #059669);
             color: white;
             padding: 4px 10px;
@@ -233,7 +276,7 @@ $top_medicines = mysqli_query(
             display: inline-block;
         }
 
-        .badge-invoice {
+        .badge-wholesale {
             background: linear-gradient(135deg, #8b5cf6, #7c3aed);
             color: white;
             padding: 4px 10px;
@@ -241,6 +284,23 @@ $top_medicines = mysqli_query(
             font-size: 12px;
             font-weight: 600;
             display: inline-block;
+        }
+
+        .badge-invoice {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .tab-active {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
         }
     </style>
 </head>
@@ -274,10 +334,37 @@ $top_medicines = mysqli_query(
                     </div>
                     <div class="mt-4 lg:mt-0 flex space-x-3">
                         <a href="create_sale.php"
-                            class="gradient-blue text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
+                            class="gradient-green text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
                             <i class="fas fa-plus"></i>
-                            <span>Create New Sale</span>
-                            <i class="fas fa-arrow-right text-blue-100 text-sm"></i>
+                            <span>Regular Sale</span>
+                        </a>
+                        <a href="create_sale_wholesale.php"
+                            class="gradient-purple text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 shadow">
+                            <i class="fas fa-users"></i>
+                            <span>Wholesale Sale</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sales Type Tabs -->
+            <div class="mx-6 my-6">
+                <div class="glass-card rounded-2xl p-2">
+                    <div class="flex space-x-2">
+                        <a href="sales.php?type=all<?php echo !empty($date_filter) ? "&date=$date_filter" : ''; ?><?php echo !empty($search_query) ? "&search=$search_query" : ''; ?>"
+                            class="flex-1 px-4 py-3 text-center rounded-xl font-medium transition-all duration-300 <?php echo $sale_type === 'all' ? 'tab-active' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'; ?>">
+                            <i class="fas fa-layer-group mr-2"></i>
+                            All Sales (<?php echo $count_data['total'] ?: 0; ?>)
+                        </a>
+                        <a href="sales.php?type=regular<?php echo !empty($date_filter) ? "&date=$date_filter" : ''; ?><?php echo !empty($search_query) ? "&search=$search_query" : ''; ?>"
+                            class="flex-1 px-4 py-3 text-center rounded-xl font-medium transition-all duration-300 <?php echo $sale_type === 'regular' ? 'tab-active' : 'bg-green-50 text-green-700 hover:bg-green-100'; ?>">
+                            <i class="fas fa-user mr-2"></i>
+                            Regular (<?php echo $count_data['regular_count'] ?: 0; ?>)
+                        </a>
+                        <a href="sales.php?type=wholesale<?php echo !empty($date_filter) ? "&date=$date_filter" : ''; ?><?php echo !empty($search_query) ? "&search=$search_query" : ''; ?>"
+                            class="flex-1 px-4 py-3 text-center rounded-xl font-medium transition-all duration-300 <?php echo $sale_type === 'wholesale' ? 'tab-active' : 'bg-purple-50 text-purple-700 hover:bg-purple-100'; ?>">
+                            <i class="fas fa-users mr-2"></i>
+                            Wholesale (<?php echo $count_data['wholesale_count'] ?: 0; ?>)
                         </a>
                     </div>
                 </div>
@@ -285,65 +372,67 @@ $top_medicines = mysqli_query(
 
             <!-- Stats Overview -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mx-6 my-6">
+                <!-- Today's Sales -->
                 <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.1s">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 rounded-xl gradient-green flex items-center justify-center shadow-lg">
-                            <i class="fas fa-indian-rupee-sign text-white text-xl"></i>
-                        </div>
-                        <span class="text-xs font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">Revenue</span>
-                    </div>
-                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($stats['total_revenue'] ?: 0, 2); ?></h3>
-                    <p class="text-gray-600 mb-3">Your Total Revenue</p>
-                    <div class="w-full bg-gray-200 rounded-full h-2">
-                        <div class="gradient-green h-2 rounded-full" style="width: 100%"></div>
-                    </div>
-                </div>
-
-                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.2s">
-                    <div class="flex items-center justify-between mb-4">
                         <div class="w-12 h-12 rounded-xl gradient-blue flex items-center justify-center shadow-lg">
-                            <i class="fas fa-receipt text-white text-xl"></i>
+                            <i class="fas fa-calendar-day text-white text-xl"></i>
                         </div>
                         <span class="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">Today</span>
                     </div>
                     <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($today['today_count'] ?: 0); ?></h3>
                     <p class="text-gray-600 mb-3">Today's Sales</p>
-                    <div class="flex items-center text-sm text-blue-500">
-                        <i class="fas fa-rupee-sign mr-1"></i>
-                        <span>Rs <?php echo number_format($today['today_total'] ?: 0, 2); ?> today</span>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-green-600">Reg: <?php echo $today['today_regular_count'] ?: 0; ?></span>
+                        <span class="text-purple-600">Whole: <?php echo $today['today_wholesale_count'] ?: 0; ?></span>
                     </div>
                 </div>
 
+                <!-- Regular Sales Stats -->
+                <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.2s">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="w-12 h-12 rounded-xl gradient-green flex items-center justify-center shadow-lg">
+                            <i class="fas fa-user text-white text-xl"></i>
+                        </div>
+                        <span class="text-xs font-bold text-green-600 bg-green-50 px-3 py-1 rounded-full">Regular</span>
+                    </div>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($regular_stats['regular_revenue'] ?: 0, 2); ?></h3>
+                    <p class="text-gray-600 mb-3">Regular Sales Revenue</p>
+                    <div class="flex items-center text-sm text-green-500">
+                        <i class="fas fa-chart-line mr-1"></i>
+                        <span>Avg: Rs <?php echo number_format($regular_stats['regular_avg_sale_value'] ?: 0, 2); ?></span>
+                    </div>
+                </div>
+
+                <!-- Wholesale Sales Stats -->
                 <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.3s">
                     <div class="flex items-center justify-between mb-4">
-                        <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 flex items-center justify-center shadow-lg">
-                            <i class="fas fa-chart-line text-white text-xl"></i>
+                        <div class="w-12 h-12 rounded-xl gradient-purple flex items-center justify-center shadow-lg">
+                            <i class="fas fa-users text-white text-xl"></i>
                         </div>
-                        <div class="flex flex-col space-y-1 text-right">
-                            <span class="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">Cash: <?php echo $stats['cash_sales'] ?: 0; ?></span>
-                            <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full">Online: <?php echo $stats['online_sales'] ?: 0; ?></span>
-                        </div>
+                        <span class="text-xs font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">Wholesale</span>
                     </div>
-                    <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($stats['total_transactions'] ?: 0); ?></h3>
-                    <p class="text-gray-600 mb-3">Total Transactions</p>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format($wholesale_stats['wholesale_revenue'] ?: 0, 2); ?></h3>
+                    <p class="text-gray-600 mb-3">Wholesale Sales Revenue</p>
                     <div class="flex items-center text-sm text-purple-500">
-                        <i class="fas fa-tag mr-1"></i>
-                        <span>Avg: Rs <?php echo number_format($stats['avg_sale_value'] ?: 0, 2); ?></span>
+                        <i class="fas fa-chart-line mr-1"></i>
+                        <span>Avg: Rs <?php echo number_format($wholesale_stats['wholesale_avg_sale_value'] ?: 0, 2); ?></span>
                     </div>
                 </div>
 
+                <!-- Total Revenue -->
                 <div class="stat-card rounded-2xl p-6 animate-fade-in-up" style="animation-delay: 0.4s">
                     <div class="flex items-center justify-between mb-4">
                         <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 flex items-center justify-center shadow-lg">
-                            <i class="fas fa-calendar-alt text-white text-xl"></i>
+                            <i class="fas fa-indian-rupee-sign text-white text-xl"></i>
                         </div>
-                        <span class="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">Activity</span>
+                        <span class="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full">Total</span>
                     </div>
-                    <h3 class="text-2xl font-bold text-gray-800 mb-2"><?php echo number_format($stats['sales_days'] ?: 0); ?></h3>
-                    <p class="text-gray-600 mb-3">Active Sales Days</p>
+                    <h3 class="text-2xl font-bold text-gray-800 mb-2">Rs <?php echo number_format(($regular_stats['regular_revenue'] + $wholesale_stats['wholesale_revenue']), 2); ?></h3>
+                    <p class="text-gray-600 mb-3">Combined Revenue</p>
                     <div class="flex items-center text-sm text-teal-500">
                         <i class="fas fa-percentage mr-1"></i>
-                        <span>Discount: Rs <?php echo number_format($stats['total_discount'] ?: 0, 2); ?></span>
+                        <span>Discount: Rs <?php echo number_format(($regular_stats['regular_total_discount'] + $wholesale_stats['wholesale_total_discount']), 2); ?></span>
                     </div>
                 </div>
             </div>
@@ -352,22 +441,43 @@ $top_medicines = mysqli_query(
             <div class="glass-card mx-6 rounded-2xl overflow-hidden animate-fade-in-up" style="animation-delay: 0.5s">
                 <div class="px-6 py-4 border-b border-blue-100 bg-gradient-to-r from-blue-50 to-blue-25 flex flex-col md:flex-row md:items-center justify-between">
                     <div class="mb-4 md:mb-0">
-                        <h3 class="text-lg font-semibold text-gray-800">Your Sales Transactions</h3>
+                        <h3 class="text-lg font-semibold text-gray-800">
+                            <?php
+                            echo $sale_type === 'all' ? 'All Sales' : ($sale_type === 'regular' ? 'Regular Sales' : 'Wholesale Sales');
+                            ?>
+                        </h3>
                         <p class="text-sm text-gray-600">Showing <?php echo $total_sales; ?> sales records</p>
                     </div>
 
-                    <div class="flex items-center space-x-4">
-                        <div class="relative">
-                            <input type="text"
-                                id="searchInput"
-                                placeholder="Search by invoice or amount..."
-                                class="pl-10 pr-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none transition bg-white/80 shadow-sm w-64">
-                            <i class="fas fa-search absolute left-3 top-3 text-blue-400"></i>
-                        </div>
+                    <div class="flex flex-col md:flex-row md:items-center space-y-3 md:space-y-0 md:space-x-4">
+                        <form method="GET" class="flex items-center space-x-2">
+                            <input type="hidden" name="type" value="<?php echo $sale_type; ?>">
+                            <div class="relative">
+                                <input type="text"
+                                    name="search"
+                                    value="<?php echo htmlspecialchars($search_query); ?>"
+                                    placeholder="Search invoice or customer..."
+                                    class="pl-10 pr-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none transition bg-white/80 shadow-sm w-full md:w-64">
+                                <i class="fas fa-search absolute left-3 top-3 text-blue-400"></i>
+                            </div>
 
-                        <input type="date"
-                            id="dateFilter"
-                            class="px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none transition bg-white/80 shadow-sm">
+                            <input type="date"
+                                name="date"
+                                value="<?php echo htmlspecialchars($date_filter); ?>"
+                                class="px-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 focus:outline-none transition bg-white/80 shadow-sm">
+
+                            <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
+                                Filter
+                            </button>
+
+                            <?php if (!empty($search_query) || !empty($date_filter)): ?>
+                                <a href="sales.php?type=<?php echo $sale_type; ?>"
+                                    class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition font-medium">
+                                    Clear
+                                </a>
+                            <?php endif; ?>
+                        </form>
                     </div>
                 </div>
 
@@ -376,7 +486,7 @@ $top_medicines = mysqli_query(
                         <thead class="sticky top-0 z-10">
                             <tr class="bg-gradient-to-r from-blue-50 to-blue-25">
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                                    Invoice Details
+                                    Invoice & Customer
                                 </th>
                                 <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                                     Sale Items
@@ -397,12 +507,13 @@ $top_medicines = mysqli_query(
                                 <?php while ($row = mysqli_fetch_assoc($result)):
                                     $sale_date = new DateTime($row['sale_date']);
                                     $net_amount = $row['total_amount'] - $row['discount'];
+                                    $is_regular = $row['customer_name'] === 'Regular Customer';
                                 ?>
                                     <tr class="table-row hover:bg-blue-25 transition-colors">
                                         <td class="px-6 py-4">
                                             <div class="flex items-start space-x-4">
-                                                <div class="w-12 h-12 rounded-xl bg-gradient-to-r from-green-500 to-green-600 flex items-center justify-center text-white font-semibold shadow flex-shrink-0">
-                                                    <i class="fas fa-receipt text-lg"></i>
+                                                <div class="w-12 h-12 rounded-xl <?php echo $is_regular ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-purple-500 to-purple-600'; ?> flex items-center justify-center text-white font-semibold shadow flex-shrink-0">
+                                                    <i class="fas <?php echo $is_regular ? 'fa-user' : 'fa-users'; ?> text-lg"></i>
                                                 </div>
                                                 <div class="flex-1 min-w-0">
                                                     <h4 class="font-semibold text-gray-800 text-lg mb-1">
@@ -411,13 +522,25 @@ $top_medicines = mysqli_query(
                                                             <?php echo htmlspecialchars($row['invoice_no']); ?>
                                                         </span>
                                                     </h4>
-                                                    <p class="text-sm text-gray-500 mb-2">
-                                                        Sale ID: <span class="font-mono"><?php echo str_pad($row['id'], 6, '0', STR_PAD_LEFT); ?></span>
-                                                    </p>
-                                                    <span class="badge-completed">
-                                                        <i class="fas fa-check mr-1 text-xs"></i>
-                                                        Completed
-                                                    </span>
+                                                    <div class="flex items-center space-x-2 mt-2">
+                                                        <?php if ($is_regular): ?>
+                                                            <span class="badge-regular">
+                                                                <i class="fas fa-user mr-1 text-xs"></i>
+                                                                Regular Sale
+                                                            </span>
+                                                        <?php else: ?>
+                                                            <span class="badge-wholesale">
+                                                                <i class="fas fa-users mr-1 text-xs"></i>
+                                                                Wholesale Sale
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <?php if (!$is_regular): ?>
+                                                        <p class="text-sm text-gray-600 mt-2">
+                                                            <i class="fas fa-user-tag mr-1"></i>
+                                                            <?php echo htmlspecialchars($row['customer_name']); ?>
+                                                        </p>
+                                                    <?php endif; ?>
                                                 </div>
                                             </div>
                                         </td>
@@ -441,7 +564,7 @@ $top_medicines = mysqli_query(
                                             <div class="space-y-2">
                                                 <div class="flex items-center justify-between">
                                                     <span class="text-sm text-gray-600">Total Amount</span>
-                                                    <span class="text-sm font-bold text-green-600">
+                                                    <span class="text-sm font-bold <?php echo $is_regular ? 'text-green-600' : 'text-purple-600'; ?>">
                                                         Rs <?php echo number_format($row['total_amount'], 2); ?>
                                                     </span>
                                                 </div>
@@ -469,6 +592,10 @@ $top_medicines = mysqli_query(
                                             <div class="space-y-2">
                                                 <div class="text-sm font-medium text-gray-800"><?php echo $sale_date->format('M d, Y'); ?></div>
                                                 <div class="text-sm text-gray-500"><?php echo $sale_date->format('h:i A'); ?></div>
+                                                <div class="text-xs <?php echo $is_regular ? 'text-green-500' : 'text-purple-500'; ?>">
+                                                    <i class="fas <?php echo $is_regular ? 'fa-user' : 'fa-users'; ?>"></i>
+                                                    <?php echo $is_regular ? 'Regular' : 'Wholesale'; ?>
+                                                </div>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4">
@@ -500,16 +627,29 @@ $top_medicines = mysqli_query(
                                 <tr>
                                     <td colspan="5" class="px-6 py-12 text-center">
                                         <div class="max-w-md mx-auto">
-                                            <div class="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow">
-                                                <i class="fas fa-shopping-cart text-blue-400 text-2xl"></i>
+                                            <div class="w-20 h-20 <?php echo $sale_type === 'regular' ? 'bg-green-100' : ($sale_type === 'wholesale' ? 'bg-purple-100' : 'bg-blue-100'); ?> rounded-full flex items-center justify-center mx-auto mb-4 shadow">
+                                                <i class="fas fa-shopping-cart <?php echo $sale_type === 'regular' ? 'text-green-400' : ($sale_type === 'wholesale' ? 'text-purple-400' : 'text-blue-400'); ?> text-2xl"></i>
                                             </div>
-                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">No Sales Found</h4>
-                                            <p class="text-gray-600 mb-6">You haven't made any sales yet.</p>
-                                            <a href="create_sale.php"
-                                                class="gradient-blue text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 inline-flex items-center space-x-2 shadow">
-                                                <i class="fas fa-plus"></i>
-                                                <span>Create First Sale</span>
-                                            </a>
+                                            <h4 class="text-lg font-semibold text-gray-800 mb-2">No <?php echo $sale_type === 'all' ? 'Sales' : ($sale_type === 'regular' ? 'Regular Sales' : 'Wholesale Sales'); ?> Found</h4>
+                                            <p class="text-gray-600 mb-6">
+                                                <?php if (!empty($search_query) || !empty($date_filter)): ?>
+                                                    No sales match your search criteria.
+                                                <?php else: ?>
+                                                    You haven't made any <?php echo $sale_type === 'regular' ? 'regular' : ($sale_type === 'wholesale' ? 'wholesale' : ''); ?> sales yet.
+                                                <?php endif; ?>
+                                            </p>
+                                            <div class="flex space-x-3 justify-center">
+                                                <a href="create_sale.php"
+                                                    class="gradient-green text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 inline-flex items-center space-x-2 shadow">
+                                                    <i class="fas fa-user"></i>
+                                                    <span>New Regular Sale</span>
+                                                </a>
+                                                <a href="create_sale_wholesale.php"
+                                                    class="gradient-purple text-white px-6 py-3 rounded-xl font-bold hover:shadow-xl transition-all duration-300 inline-flex items-center space-x-2 shadow">
+                                                    <i class="fas fa-users"></i>
+                                                    <span>New Wholesale Sale</span>
+                                                </a>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -523,13 +663,13 @@ $top_medicines = mysqli_query(
                         <div class="mb-4 md:mb-0">
                             <div class="text-sm text-gray-500">
                                 Showing <?php echo $total_sales; ?> sales •
-                                <span class="font-medium text-blue-600">
-                                    Full Management Access
+                                <span class="font-medium <?php echo $sale_type === 'regular' ? 'text-green-600' : ($sale_type === 'wholesale' ? 'text-purple-600' : 'text-blue-600'); ?>">
+                                    <?php echo $sale_type === 'all' ? 'All Sales' : ($sale_type === 'regular' ? 'Regular Sales' : 'Wholesale Sales'); ?>
                                 </span>
                             </div>
                         </div>
                         <div class="flex space-x-2">
-                            <button onclick="exportMySalesToExcel()"
+                            <button onclick="exportSalesToExcel('<?php echo $sale_type; ?>')"
                                 class="px-4 py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition flex items-center space-x-2 bg-white/80 shadow-sm">
                                 <i class="fas fa-file-excel text-green-500"></i>
                                 <span class="text-sm text-gray-700">Export Excel</span>
@@ -549,20 +689,25 @@ $top_medicines = mysqli_query(
                     </h3>
                     <div class="space-y-4">
                         <?php if (mysqli_num_rows($recent_sales) > 0): ?>
-                            <?php while ($recent = mysqli_fetch_assoc($recent_sales)): ?>
-                                <div class="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-white rounded-lg border border-blue-100 hover:border-blue-200 transition">
+                            <?php while ($recent = mysqli_fetch_assoc($recent_sales)):
+                                $is_recent_regular = $recent['customer_name'] === 'Regular Customer';
+                            ?>
+                                <div class="flex items-center justify-between p-3 bg-gradient-to-r <?php echo $is_recent_regular ? 'from-green-50' : 'from-purple-50'; ?> to-white rounded-lg border <?php echo $is_recent_regular ? 'border-green-100' : 'border-purple-100'; ?> hover:<?php echo $is_recent_regular ? 'border-green-200' : 'border-purple-200'; ?> transition">
                                     <div class="flex items-center space-x-3">
-                                        <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                                            <i class="fas fa-receipt text-blue-600 text-sm"></i>
+                                        <div class="w-8 h-8 rounded-lg <?php echo $is_recent_regular ? 'bg-green-100' : 'bg-purple-100'; ?> flex items-center justify-center">
+                                            <i class="fas <?php echo $is_recent_regular ? 'fa-user text-green-600' : 'fa-users text-purple-600'; ?> text-sm"></i>
                                         </div>
                                         <div>
                                             <h4 class="font-medium text-gray-800 text-sm"><?php echo htmlspecialchars($recent['invoice_no']); ?></h4>
-                                            <p class="text-xs text-gray-500"><?php echo date('M d', strtotime($recent['sale_date'])); ?></p>
+                                            <p class="text-xs <?php echo $is_recent_regular ? 'text-green-500' : 'text-purple-500'; ?>">
+                                                <i class="fas <?php echo $is_recent_regular ? 'fa-user' : 'fa-users'; ?> mr-1"></i>
+                                                <?php echo $is_recent_regular ? 'Regular' : htmlspecialchars($recent['customer_name']); ?>
+                                            </p>
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <p class="text-sm font-bold text-blue-600">Rs <?php echo number_format($recent['total_amount'], 2); ?></p>
-                                        <p class="text-xs text-gray-400"><?php echo date('h:i A', strtotime($recent['sale_date'])); ?></p>
+                                        <p class="text-sm font-bold <?php echo $is_recent_regular ? 'text-green-600' : 'text-purple-600'; ?>">Rs <?php echo number_format($recent['total_amount'], 2); ?></p>
+                                        <p class="text-xs text-gray-400"><?php echo date('M d, h:i A', strtotime($recent['sale_date'])); ?></p>
                                     </div>
                                 </div>
                             <?php endwhile; ?>
@@ -682,22 +827,39 @@ $top_medicines = mysqli_query(
             });
         }
 
-        // Export my sales to Excel
-        function exportMySalesToExcel() {
+        // Export sales to Excel based on type
+        function exportSalesToExcel(type) {
             try {
                 const rows = [];
-                rows.push(['Invoice No', 'Date', 'Time', 'Items Count', 'Total Quantity', 'Total Amount', 'Discount', 'Net Amount', 'Payment Method']);
+                let filename = '';
+
+                if (type === 'regular') {
+                    rows.push(['Regular Sales Report']);
+                    filename = 'Regular_Sales_Report_';
+                } else if (type === 'wholesale') {
+                    rows.push(['Wholesale Sales Report']);
+                    filename = 'Wholesale_Sales_Report_';
+                } else {
+                    rows.push(['All Sales Report']);
+                    filename = 'All_Sales_Report_';
+                }
+
+                rows.push([]); // Empty row for spacing
+                rows.push(['Invoice No', 'Customer', 'Date', 'Time', 'Sale Type', 'Items Count', 'Total Quantity', 'Total Amount', 'Discount', 'Net Amount', 'Payment Method']);
 
                 <?php
                 mysqli_data_seek($result, 0);
                 while ($row = mysqli_fetch_assoc($result)):
                     $sale_date = new DateTime($row['sale_date']);
                     $net_amount = $row['total_amount'] - $row['discount'];
+                    $is_regular = $row['customer_name'] === 'Regular Customer';
                 ?>
                     rows.push([
                         '<?php echo $row['invoice_no']; ?>',
+                        '<?php echo htmlspecialchars($row['customer_name']); ?>',
                         '<?php echo $sale_date->format('Y-m-d'); ?>',
                         '<?php echo $sale_date->format('H:i:s'); ?>',
+                        '<?php echo $is_regular ? 'Regular' : 'Wholesale'; ?>',
                         <?php echo $row['items_count'] ?: 0; ?>,
                         <?php echo $row['total_quantity'] ?: 0; ?>,
                         <?php echo $row['total_amount']; ?>,
@@ -709,50 +871,16 @@ $top_medicines = mysqli_query(
 
                 const ws = XLSX.utils.aoa_to_sheet(rows);
                 const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, 'My Sales Data');
+                XLSX.utils.book_append_sheet(wb, ws, 'Sales Data');
 
                 const today = new Date().toISOString().slice(0, 10);
-                XLSX.writeFile(wb, `My_Sales_${today}.xlsx`);
+                XLSX.writeFile(wb, `${filename}${today}.xlsx`);
 
                 showNotification('Excel file exported successfully!', 'success');
             } catch (error) {
                 console.error('Excel export error:', error);
                 showNotification('Error exporting Excel file', 'error');
             }
-        }
-
-        // Search functionality
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('input', function(e) {
-                const searchTerm = e.target.value.toLowerCase();
-                const rows = document.querySelectorAll('tbody tr');
-
-                rows.forEach(row => {
-                    const text = row.textContent.toLowerCase();
-                    row.style.display = text.includes(searchTerm) ? '' : 'none';
-                });
-            });
-        }
-
-        // Date filter
-        const dateFilter = document.getElementById('dateFilter');
-        if (dateFilter) {
-            dateFilter.addEventListener('change', function(e) {
-                const selectedDate = e.target.value;
-                if (selectedDate) {
-                    const rows = document.querySelectorAll('tbody tr');
-                    rows.forEach(row => {
-                        const dateText = row.cells[3]?.textContent.toLowerCase();
-                        row.style.display = dateText.includes(selectedDate) ? '' : 'none';
-                    });
-                } else {
-                    const rows = document.querySelectorAll('tbody tr');
-                    rows.forEach(row => {
-                        row.style.display = '';
-                    });
-                }
-            });
         }
 
         // Show notification function
@@ -798,17 +926,19 @@ $top_medicines = mysqli_query(
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-                e.preventDefault();
-                if (searchInput) {
-                    searchInput.focus();
-                    searchInput.select();
-                }
-            }
-
             if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
                 e.preventDefault();
                 window.location.href = 'create_sale.php';
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 'w') {
+                e.preventDefault();
+                window.location.href = 'create_sale_wholesale.php';
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                window.location.href = 'sales.php';
             }
         });
     </script>

@@ -49,7 +49,7 @@ $user_name = $_SESSION['name'];
                     </div>
                     <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
                 </button>
-                
+
                 <!-- Medicines Submenu -->
                 <div class="medicines-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php']) ? '' : 'hidden'; ?>">
                     <!-- All Medicines -->
@@ -57,25 +57,25 @@ $user_name = $_SESSION['name'];
                         <div class="w-2 h-2 rounded-full <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['medicines.php', 'add_medicine.php', 'edit_medicine.php']) ? 'text-blue-200' : 'text-gray-300'; ?>">All Medicines</span>
                     </a>
-                    
+
                     <!-- Search Brand -->
                     <a href="search_brand.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'bg-blue-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'search_brand.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Search Brand</span>
                     </a>
-                    
+
                     <!-- Search Generic -->
                     <a href="search_generic.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'bg-blue-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'search_generic.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Search Generic</span>
                     </a>
-                    
+
                     <!-- Return to Company -->
                     <a href="return_to_company.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'bg-blue-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'return_to_company.php' ? 'text-blue-200' : 'text-gray-300'; ?>">Return to Company</span>
                     </a>
-                    
+
                     <!-- Expired Medicines -->
                     <a href="expired_medicines.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'bg-red-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'expired_medicines.php' ? 'bg-red-400' : 'bg-gray-500'; ?>"></div>
@@ -108,7 +108,7 @@ $user_name = $_SESSION['name'];
                     </div>
                     <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
                 </button>
-                
+
                 <!-- Stock Submenu -->
                 <div class="stock-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['stock.php', 'add_stock.php', 'edit_stock.php']) ? '' : 'hidden'; ?>">
                     <!-- View Stock -->
@@ -116,7 +116,7 @@ $user_name = $_SESSION['name'];
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'stock.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'stock.php' ? 'text-green-200' : 'text-gray-300'; ?>">View Stock</span>
                     </a>
-                    
+
                     <!-- Add Stock -->
                     <a href="add_stock.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'bg-green-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'add_stock.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
@@ -136,7 +136,7 @@ $user_name = $_SESSION['name'];
                     </div>
                     <i class="fas fa-chevron-down text-xs text-gray-400 transition-transform duration-200"></i>
                 </button>
-                
+
                 <!-- Sale Submenu -->
                 <div class="sale-submenu pl-4 ml-4 border-l border-gray-700/50 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php', 'create_sale.php', 'payments.php', 'expenses.php', 'profit.php']) ? '' : 'hidden'; ?>">
                     <!-- Create Sale -->
@@ -147,13 +147,21 @@ $user_name = $_SESSION['name'];
                             <i class="fas fa-bolt"></i>
                         </span>
                     </a>
-                    
+                     <a href="create_regular_sale.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'create_sale.php' ? 'bg-purple-500/10' : ''; ?>">
+                        <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'create_regular__sale.php' ? 'bg-purple-400' : 'bg-gray-500'; ?>"></div>
+                        <span class="text-sm font-medium <?php echo basename($_SERVER['PHP_SELF']) == 'create_regular_sale.php' ? 'text-purple-200' : 'text-gray-300'; ?>">Create  Regular Sale</span>
+                        <span class="ml-auto bg-green-500/20 text-green-300 text-xs px-2 py-1 rounded-full font-medium">
+                            <i class="fas fa-bolt"></i>
+                        </span>
+                    </a>
+
+
                     <!-- View Sales -->
                     <a href="sales.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'bg-purple-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'bg-purple-400' : 'bg-gray-500'; ?>"></div>
                         <span class="text-sm font-medium <?php echo in_array(basename($_SERVER['PHP_SELF']), ['sales.php', 'view_sale.php']) ? 'text-purple-200' : 'text-gray-300'; ?>">View Sales</span>
                     </a>
-                    
+
                     <!-- Payments -->
                     <a href="payments.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'bg-blue-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'payments.php' ? 'bg-blue-400' : 'bg-gray-500'; ?>"></div>
@@ -176,7 +184,7 @@ $user_name = $_SESSION['name'];
                             <?php endif; ?>
                         <?php endif; ?>
                     </a>
-                    
+
                     <!-- Expenses -->
                     <a href="expenses.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'bg-red-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'expenses.php' ? 'bg-red-400' : 'bg-gray-500'; ?>"></div>
@@ -197,7 +205,7 @@ $user_name = $_SESSION['name'];
                             <?php endif; ?>
                         <?php endif; ?>
                     </a>
-                    
+
                     <!-- Profit Analysis -->
                     <a href="profit.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200 <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'bg-green-500/10' : ''; ?>">
                         <div class="w-2 h-2 rounded-full <?php echo basename($_SERVER['PHP_SELF']) == 'profit.php' ? 'bg-green-400' : 'bg-gray-500'; ?>"></div>
@@ -625,7 +633,7 @@ $user_name = $_SESSION['name'];
         function toggleDropdown(toggleBtn, submenu, chevron) {
             toggleBtn.addEventListener('click', () => {
                 const isExpanded = !submenu.classList.contains('hidden');
-                
+
                 // Close all other dropdowns
                 [medicinesSubmenu, stockSubmenu, saleSubmenu].forEach(menu => {
                     if (menu !== submenu) {
@@ -657,7 +665,7 @@ $user_name = $_SESSION['name'];
 
         // Open dropdown based on current page
         const currentPage = window.location.pathname.split('/').pop();
-        
+
         // Define which pages belong to which dropdown
         const medicinesPages = ['medicines.php', 'add_medicine.php', 'edit_medicine.php', 'search_brand.php', 'search_generic.php', 'return_to_company.php', 'expired_medicines.php'];
         const stockPages = ['stock.php', 'add_stock.php', 'edit_stock.php'];
@@ -690,7 +698,7 @@ $user_name = $_SESSION['name'];
             if (href === currentPage) {
                 // Remove all active classes
                 link.classList.remove('bg-gray-700/50');
-                
+
                 // Add appropriate active class based on section
                 if (medicinesPages.includes(currentPage)) {
                     link.classList.add('bg-blue-500/20');

@@ -575,6 +575,10 @@ $active_medicines_count = mysqli_fetch_assoc($active_medicines)['active_medicine
                             <div class="w-2 h-2 rounded-full bg-gray-500"></div>
                             <span class="text-sm font-medium text-gray-300">Create Sale</span>
                         </a>
+                        <a href="create_regular_sale.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">
+                            <div class="w-2 h-2 rounded-full bg-gray-500"></div>
+                            <span class="text-sm font-medium text-gray-300">Create Regular Sale</span>
+                        </a>
                         
                         <!-- View Sales -->
                         <a href="sales.php" class="flex items-center space-x-3 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all duration-200">

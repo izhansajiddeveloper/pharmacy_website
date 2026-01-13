@@ -11,9 +11,6 @@ $pharmacist_id = $_SESSION['user_id'];
 $error = '';
 $success = '';
 
-// Check if coming from view stock page with selected medicine
-$selected_medicine_id = isset($_GET['medicine_id']) ? intval($_GET['medicine_id']) : 0;
-
 // Generate invoice number
 function generateUniqueInvoiceNo($conn)
 {
@@ -21,6 +18,7 @@ function generateUniqueInvoiceNo($conn)
     $yearMonth = date('Ym'); // Format: 202601
     $seqKey = $prefix . $yearMonth;
 
+    // Atomically increment the counter for the current month
     $query = "INSERT INTO invoice_sequences (seq_key, last_value) 
               VALUES ('$seqKey', 1) 
               ON DUPLICATE KEY UPDATE last_value = LAST_INSERT_ID(last_value + 1)";
@@ -29,62 +27,29 @@ function generateUniqueInvoiceNo($conn)
         throw new Exception("Sequence error: " . mysqli_error($conn));
     }
 
+    // Retrieve the value generated
     $newID = mysqli_insert_id($conn);
+
+    // Format the final string
     return $seqKey . str_pad($newID, 4, '0', STR_PAD_LEFT);
 }
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Start transaction
     mysqli_begin_transaction($conn);
 
     try {
         $invoice_no = generateUniqueInvoiceNo($conn);
-        $customer_name = mysqli_real_escape_string($conn, $_POST['customer_name']);
+        // Regular customer - no name needed, use default
+        $customer_name = "Regular Customer";
         $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
-
-        // Process sale items first to calculate total
-        $medicine_ids = $_POST['medicine_id'];
-        $quantities = $_POST['quantity'];
-        $prices = $_POST['price'];
-
-        $items_data = [];
-        $total_amount_before_discount = 0;
-
-        for ($i = 0; $i < count($medicine_ids); $i++) {
-            $medicine_id = intval($medicine_ids[$i]);
-            $quantity = intval($quantities[$i]);
-            $price = floatval($prices[$i]);
-
-            if ($medicine_id > 0 && $quantity > 0 && $price > 0) {
-                $items_data[] = [
-                    'medicine_id' => $medicine_id,
-                    'quantity' => $quantity,
-                    'price' => $price
-                ];
-                $total_amount_before_discount += ($quantity * $price);
-            }
-        }
-
-        // Dynamic discount calculation
-        if ($total_amount_before_discount >= 5000) {
-            $discount_percentage = 8;
-        } elseif ($total_amount_before_discount >= 2000) {
-            $discount_percentage = 5;
-        } elseif ($total_amount_before_discount >= 1000) {
-            $discount_percentage = 3;
-        } elseif ($total_amount_before_discount >= 500) {
-            $discount_percentage = 2;
-        } else {
-            $discount_percentage = 0;
-        }
-
-        // Calculate discount amount
-        $discount_amount = ($total_amount_before_discount * $discount_percentage) / 100;
-        $total_amount = max(0, $total_amount_before_discount - $discount_amount);
+        $discount = floatval($_POST['discount']);
+        $total_amount = 0;
 
         // Insert sale
         $sale_query = "INSERT INTO sales (invoice_no, pharmacist_id, total_amount, discount, payment_method, sale_date) 
-                       VALUES ('$invoice_no', $pharmacist_id, $total_amount, $discount_amount, '$payment_method', NOW())";
+                       VALUES ('$invoice_no', $pharmacist_id, 0, $discount, '$payment_method', NOW())";
 
         if (!mysqli_query($conn, $sale_query)) {
             throw new Exception("Error creating sale: " . mysqli_error($conn));
@@ -92,65 +57,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $sale_id = mysqli_insert_id($conn);
 
-        // Process sale items - auto-select batch with FIFO (First In First Out)
-        foreach ($items_data as $item) {
-            $medicine_id = $item['medicine_id'];
-            $quantity = $item['quantity'];
-            $price = $item['price'];
+        // Process sale items
+        $medicine_ids = $_POST['medicine_id'];
+        $quantities = $_POST['quantity'];
+        $prices = $_POST['price'];
 
-            // Find available batches with FIFO (earliest expiry first)
-            $batch_query = "SELECT sb.id, sb.quantity, sb.batch_no, sb.selling_price
-                           FROM stock_batches sb 
-                           WHERE sb.medicine_id = $medicine_id
-                           AND sb.quantity > 0 
-                           AND sb.expiry_date > CURDATE() 
-                           AND sb.is_expired = 0
-                           ORDER BY sb.expiry_date ASC, sb.received_date ASC";
+        for ($i = 0; $i < count($medicine_ids); $i++) {
+            $medicine_id = intval($medicine_ids[$i]);
+            $quantity = intval($quantities[$i]);
+            $price = floatval($prices[$i]);
 
-            $batch_result = mysqli_query($conn, $batch_query);
+            if ($medicine_id > 0 && $quantity > 0 && $price > 0) {
+                // Check stock availability
+                $stock_query = "SELECT sb.id, sb.quantity 
+                                FROM stock_batches sb 
+                                WHERE sb.medicine_id = $medicine_id 
+                                AND sb.quantity >= $quantity 
+                                AND sb.expiry_date > CURDATE() 
+                                AND sb.is_expired = 0
+                                ORDER BY sb.expiry_date ASC 
+                                LIMIT 1";
+                $stock_result = mysqli_query($conn, $stock_query);
 
-            if (mysqli_num_rows($batch_result) > 0) {
-                $remaining_quantity = $quantity;
+                if (mysqli_num_rows($stock_result) > 0) {
+                    $stock = mysqli_fetch_assoc($stock_result);
+                    $batch_id = $stock['id'];
 
-                while ($remaining_quantity > 0 && ($batch = mysqli_fetch_assoc($batch_result))) {
-                    $batch_id = $batch['id'];
-                    $batch_stock = $batch['quantity'];
-                    $batch_no = $batch['batch_no'];
+                    // Insert sale item
+                    $item_query = "INSERT INTO sale_items (sale_id, medicine_id, batch_id, quantity, price) 
+                                   VALUES ($sale_id, $medicine_id, $batch_id, $quantity, $price)";
 
-                    // Calculate how much to take from this batch
-                    $take_quantity = min($remaining_quantity, $batch_stock);
-
-                    if ($take_quantity > 0) {
-                        // Insert sale item with this batch
-                        $item_query = "INSERT INTO sale_items (sale_id, medicine_id, batch_id, quantity, price) 
-                                       VALUES ($sale_id, $medicine_id, $batch_id, $take_quantity, $price)";
-
-                        if (!mysqli_query($conn, $item_query)) {
-                            throw new Exception("Error adding sale item: " . mysqli_error($conn));
-                        }
-
-                        // Update stock for this batch
-                        $update_stock = "UPDATE stock_batches SET quantity = quantity - $take_quantity WHERE id = $batch_id";
-                        if (!mysqli_query($conn, $update_stock)) {
-                            throw new Exception("Error updating stock: " . mysqli_error($conn));
-                        }
-
-                        $remaining_quantity -= $take_quantity;
+                    if (!mysqli_query($conn, $item_query)) {
+                        throw new Exception("Error adding sale item: " . mysqli_error($conn));
                     }
-                }
 
-                // If we still have quantity left after checking all batches
-                if ($remaining_quantity > 0) {
-                    throw new Exception("Insufficient stock for medicine ID: $medicine_id. Only " . ($quantity - $remaining_quantity) . " available.");
+                    // Update stock
+                    $update_stock = "UPDATE stock_batches SET quantity = quantity - $quantity WHERE id = $batch_id";
+                    if (!mysqli_query($conn, $update_stock)) {
+                        throw new Exception("Error updating stock: " . mysqli_error($conn));
+                    }
+
+                    $total_amount += ($quantity * $price);
+                } else {
+                    throw new Exception("Insufficient stock for medicine ID: $medicine_id");
                 }
-            } else {
-                throw new Exception("No stock available for medicine ID: $medicine_id");
             }
         }
 
-        // Create invoice with customer name
+        // Update sale total
+        $update_sale = "UPDATE sales SET total_amount = $total_amount WHERE id = $sale_id";
+        if (!mysqli_query($conn, $update_sale)) {
+            throw new Exception("Error updating sale total: " . mysqli_error($conn));
+        }
+
+        // Create invoice with "Regular Customer" as default
         $invoice_query = "INSERT INTO invoices (invoice_no, sale_id, pharmacist_id, customer_name, total_amount, discount, payment_method) 
-                          VALUES ('$invoice_no', $sale_id, $pharmacist_id, '$customer_name', $total_amount, $discount_amount, '$payment_method')";
+                          VALUES ('$invoice_no', $sale_id, $pharmacist_id, '$customer_name', $total_amount, $discount, '$payment_method')";
 
         if (!mysqli_query($conn, $invoice_query)) {
             throw new Exception("Error creating invoice: " . mysqli_error($conn));
@@ -169,8 +131,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Error creating invoice items: " . mysqli_error($conn));
         }
 
+        // Commit transaction
         mysqli_commit($conn);
-        header("Location: view_sale.php?id=$sale_id&type=wholesale&success=1");
+
+        // Redirect to view sale or print invoice
+        header("Location: view_sale.php?id=$sale_id&type=regular&success=1");
         exit;
     } catch (Exception $e) {
         mysqli_rollback($conn);
@@ -178,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch medicines with stock and their selling price
+// Fetch medicines with stock
 $medicines_query = "
     SELECT 
         m.id,
@@ -200,17 +165,6 @@ $medicines_query = "
 
 $medicines_result = mysqli_query($conn, $medicines_query);
 
-// Get selected medicine details if any
-$selected_medicine_data = null;
-if ($selected_medicine_id > 0) {
-    $medicine_query = "SELECT m.*, mg.name as generic_name FROM medicines m
-                       LEFT JOIN medicine_generics mg ON m.generic_id = mg.id
-                       WHERE m.id = $selected_medicine_id";
-    $medicine_result = mysqli_query($conn, $medicine_query);
-    if (mysqli_num_rows($medicine_result) > 0) {
-        $selected_medicine_data = mysqli_fetch_assoc($medicine_result);
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -219,7 +173,7 @@ if ($selected_medicine_id > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wholesale Sale | MediCare Pharma</title>
+    <title>Quick Sale - Regular Customer | MediCare Pharma</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -277,17 +231,28 @@ if ($selected_medicine_id > 0) {
             background-color: rgba(59, 130, 246, 0.05);
         }
 
-        .discount-badge {
-            font-size: 0.75rem;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 600;
+        .quick-actions {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            z-index: 100;
         }
 
-        .price-readonly {
-            background-color: #f3f4f6;
-            color: #374151;
-            cursor: not-allowed;
+        .barcode-scanner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            display: none;
+        }
+
+        .scanner-active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
@@ -304,25 +269,20 @@ if ($selected_medicine_id > 0) {
                 <div class="flex flex-col lg:flex-row lg:items-center justify-between">
                     <div>
                         <h1 class="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
-                            <i class="fas fa-users text-blue-500"></i>
-                            <span class="gradient-text">Wholesale Sale</span>
+                            <i class="fas fa-bolt text-blue-500"></i>
+                            <span class="gradient-text">Quick Sale</span>
+                            <span class="text-gray-600 text-lg md:text-xl">(Regular Customer)</span>
                         </h1>
                         <p class="text-gray-600 flex items-center space-x-2">
                             <i class="fas fa-store text-blue-500"></i>
-                            <span>Bulk sales for wholesale customers</span>
-                            <?php if ($selected_medicine_data): ?>
-                                <span class="text-green-600 font-medium">
-                                    <i class="fas fa-check-circle"></i>
-                                    Pre-filled: <?php echo htmlspecialchars($selected_medicine_data['name']); ?>
-                                </span>
-                            <?php endif; ?>
+                            <span>Fast checkout for walk-in customers</span>
                         </p>
                     </div>
                     <div class="mt-4 lg:mt-0 flex space-x-2">
-                        <a href="create_regular_sale.php"
+                        <a href="create_sale.php"
                             class="px-4 md:px-6 py-2 md:py-3 border border-blue-200 text-gray-700 rounded-xl hover:bg-blue-50 transition font-bold flex items-center space-x-2 shadow-sm text-sm md:text-base">
-                            <i class="fas fa-user text-blue-500"></i>
-                            <span class="hidden md:inline">Regular Sale</span>
+                            <i class="fas fa-users text-blue-500"></i>
+                            <span class="hidden md:inline">Wholesale</span>
                         </a>
                         <a href="sales.php"
                             class="px-4 md:px-6 py-2 md:py-3 border border-blue-200 text-gray-700 rounded-xl hover:bg-blue-50 transition font-bold flex items-center space-x-2 shadow-sm text-sm md:text-base">
@@ -348,41 +308,10 @@ if ($selected_medicine_id > 0) {
             <?php endif; ?>
 
             <form method="POST" id="saleForm" class="space-y-4 md:space-y-6">
-                <!-- Discount Information Bar -->
-                <div class="glass-card rounded-2xl p-4 bg-gradient-to-r from-blue-50 to-blue-25 border border-blue-200">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h4 class="font-bold text-blue-800 flex items-center">
-                                <i class="fas fa-percentage mr-2"></i>
-                                Automatic Discount Rules (Wholesale)
-                            </h4>
-                            <div class="text-sm text-blue-600 mt-1">
-                                <span class="bg-blue-100 px-2 py-1 rounded">0-500: 0%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">500-1000: 2%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">1000-2000: 3%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">2000-5000: 5%</span>
-                                <span class="bg-blue-100 px-2 py-1 rounded ml-2">5000+: 8%</span>
-                            </div>
-                        </div>
-                        <div class="text-sm text-blue-700 font-medium">
-                            <i class="fas fa-info-circle mr-1"></i>
-                            Discount auto-calculated based on subtotal
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Customer & Payment Info -->
+                <!-- Quick Actions Bar -->
                 <div class="glass-card rounded-2xl p-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">
-                                <i class="fas fa-user"></i> Customer Name
-                            </label>
-                            <input type="text" name="customer_name" required
-                                class="w-full form-input px-4 py-2 md:py-3 rounded-lg"
-                                placeholder="Enter customer name">
-                        </div>
-                        <div>
+                    <div class="flex flex-wrap gap-3">
+                        <div class="flex-1 min-w-[200px]">
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 <i class="fas fa-credit-card"></i> Payment Method
                             </label>
@@ -391,24 +320,32 @@ if ($selected_medicine_id > 0) {
                                 <option value="Cash" selected>Cash</option>
                                 <option value="Online">Online</option>
                                 <option value="Card">Card</option>
-                                <option value="Credit">Credit</option>
                             </select>
+                        </div>
+                        <div class="flex-1 min-w-[150px]">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">
+                                <i class="fas fa-percentage"></i> Discount (Rs)
+                            </label>
+                            <input type="number" name="discount" id="discount" min="0" step="0.01" value="0"
+                                class="w-full form-input px-4 py-2 md:py-3 rounded-lg"
+                                placeholder="0.00">
+                        </div>
+                        <div class="flex items-end">
+                            <button type="button" onclick="startBarcodeScanner()"
+                                class="px-4 py-2 md:py-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition flex items-center space-x-2">
+                                <i class="fas fa-barcode"></i>
+                                <span>Scan Barcode</span>
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Sale Items Section -->
+                <!-- Sale Items - Optimized for speed -->
                 <div class="glass-card rounded-2xl p-4 md:p-6">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-lg font-semibold text-gray-800 flex items-center space-x-2">
                             <i class="fas fa-pills text-green-500"></i>
-                            <span>Sale Items</span>
-                            <?php if ($selected_medicine_data): ?>
-                                <span class="text-sm font-normal text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                                    <i class="fas fa-check-circle mr-1"></i>
-                                    1 medicine pre-selected
-                                </span>
-                            <?php endif; ?>
+                            <span>Items</span>
                         </h3>
                         <div class="flex space-x-2">
                             <button type="button" onclick="addItemRow()"
@@ -449,20 +386,12 @@ if ($selected_medicine_id > 0) {
                                 <span class="text-gray-600">Subtotal:</span>
                                 <span id="subtotal" class="font-bold text-gray-800">Rs0.00</span>
                             </div>
-                            <div class="flex justify-between text-sm text-blue-600">
-                                <span>Discount Rate:</span>
-                                <span id="autoDiscountRate" class="font-bold">0%</span>
-                            </div>
                         </div>
 
                         <div class="space-y-2">
                             <div class="flex justify-between">
                                 <span class="text-gray-600">Discount:</span>
                                 <span id="discountDisplay" class="font-bold text-red-600">Rs0.00</span>
-                            </div>
-                            <div class="flex justify-between text-sm text-gray-500">
-                                <span>Applied Discount:</span>
-                                <span id="appliedDiscountInfo">Auto-calculated</span>
                             </div>
                             <div class="border-t border-gray-200 pt-2">
                                 <div class="flex justify-between">
@@ -486,6 +415,34 @@ if ($selected_medicine_id > 0) {
         </main>
     </div>
 
+    <!-- Barcode Scanner Modal -->
+    <div id="barcodeScanner" class="barcode-scanner">
+        <div class="bg-white rounded-2xl p-6 m-4 max-w-md w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-800">Scan Barcode</h3>
+                <button onclick="stopBarcodeScanner()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div id="scannerArea" class="border-2 border-dashed border-gray-300 rounded-lg h-64 flex items-center justify-center">
+                <div class="text-center">
+                    <i class="fas fa-barcode text-4xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-600">Scanner will be activated here</p>
+                    <p class="text-sm text-gray-500 mt-2">(Simulation mode)</p>
+                </div>
+            </div>
+            <div class="mt-4">
+                <input type="text" id="manualBarcode"
+                    placeholder="Or enter barcode manually..."
+                    class="w-full form-input px-4 py-3 rounded-lg mb-2"
+                    onkeypress="if(event.key === 'Enter') addByBarcode()">
+                <button onclick="addByBarcode()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-plus mr-2"></i>Add Item
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Available medicines from PHP
         const medicines = [
@@ -495,41 +452,13 @@ if ($selected_medicine_id > 0) {
                     generic: '<?php echo addslashes($medicine['generic_name'] ?: ''); ?>',
                     stock: <?php echo $medicine['total_stock']; ?>,
                     price: <?php echo $medicine['min_price'] ?: 0; ?>,
-                    barcode: '<?php echo addslashes($medicine['id'] . "000"); ?>'
+                    barcode: '<?php echo addslashes($medicine['id'] . "000"); ?>' // Simulated barcode
                 },
             <?php endwhile; ?>
         ];
 
-        // Selected medicine data from PHP (if any)
-        const selectedMedicine = <?php echo $selected_medicine_data ? json_encode($selected_medicine_data) : 'null'; ?>;
-
         let itemCount = 0;
-        let currentAutoDiscount = 0;
-        let currentAutoDiscountPercentage = 0;
-
-        // Calculate automatic discount based on total amount
-        function calculateAutoDiscount(subtotal) {
-            let discountPercentage = 0;
-
-            if (subtotal >= 5000) {
-                discountPercentage = 8;
-            } else if (subtotal >= 2000) {
-                discountPercentage = 5;
-            } else if (subtotal >= 1000) {
-                discountPercentage = 3;
-            } else if (subtotal >= 500) {
-                discountPercentage = 2;
-            } else {
-                discountPercentage = 0;
-            }
-
-            const discountAmount = (subtotal * discountPercentage) / 100;
-
-            return {
-                percentage: discountPercentage,
-                amount: discountAmount
-            };
-        }
+        let scannerActive = false;
 
         function addItemRow(medicineId = '', quantity = 1, price = 0) {
             const container = document.getElementById('itemsContainer');
@@ -538,13 +467,12 @@ if ($selected_medicine_id > 0) {
             const row = document.createElement('div');
             row.className = 'item-row bg-gray-50 p-4 rounded-lg';
             row.id = `itemRow${itemId}`;
-
             row.innerHTML = `
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div class="md:col-span-6">
+                    <div class="md:col-span-5">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Medicine</label>
                         <select name="medicine_id[]" class="medicine-select w-full form-input px-3 py-2 rounded-lg text-sm"
-                                onchange="updateMedicinePrice(${itemId})" required>
+                                onchange="updatePrice(${itemId})" required>
                             <option value="">Select Medicine</option>
                             ${medicines.map(med => `
                                 <option value="${med.id}" 
@@ -552,26 +480,26 @@ if ($selected_medicine_id > 0) {
                                         data-price="${med.price}"
                                         ${medicineId == med.id ? 'selected' : ''}>
                                     ${med.name} ${med.generic ? `(${med.generic})` : ''} 
-                                    <span class="text-xs text-gray-500">Stock: ${med.stock}</span>
                                 </option>
                             `).join('')}
                         </select>
-                        <div class="mt-1 text-xs text-gray-500" id="stockInfo${itemId}"></div>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Qty</label>
                         <input type="number" name="quantity[]" min="1" value="${quantity}"
                                class="quantity-input w-full form-input px-3 py-2 rounded-lg text-sm"
-                               onchange="updateStockInfo(${itemId}); updateTotal()" 
-                               oninput="updateStockInfo(${itemId}); updateTotal()" required>
+                               onchange="updateTotal()" oninput="updateTotal()" required>
+                        <div class="text-xs text-gray-500 mt-1">
+                            Stock: <span class="available-stock" id="availableStock${itemId}">0</span>
+                        </div>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Price</label>
                         <input type="number" name="price[]" step="0.01" min="0" value="${price}"
-                               class="price-input w-full form-input px-3 py-2 rounded-lg text-sm price-readonly"
-                               readonly required>
+                               class="price-input w-full form-input px-3 py-2 rounded-lg text-sm"
+                               onchange="updateTotal()" oninput="updateTotal()" required>
                     </div>
-                    <div class="md:col-span-1">
+                    <div class="md:col-span-2">
                         <label class="block text-sm font-medium text-gray-700 mb-1">Total</label>
                         <div class="font-bold text-green-600 text-lg" id="itemTotal${itemId}">Rs0.00</div>
                     </div>
@@ -588,68 +516,10 @@ if ($selected_medicine_id > 0) {
 
             // Initialize values if provided
             if (medicineId) {
-                updateMedicinePrice(itemId);
-                updateStockInfo(itemId);
+                updatePrice(itemId);
             }
             updateTotal();
             updateItemCount();
-        }
-
-        function updateMedicinePrice(itemId) {
-            const select = document.querySelector(`#itemRow${itemId} .medicine-select`);
-            const selectedOption = select.options[select.selectedIndex];
-            const priceInput = document.querySelector(`#itemRow${itemId} .price-input`);
-
-            if (selectedOption.value) {
-                const price = selectedOption.getAttribute('data-price');
-                const stock = selectedOption.getAttribute('data-stock');
-
-                if (price > 0) {
-                    priceInput.value = price;
-                } else {
-                    priceInput.value = 0;
-                }
-
-                // Auto-focus quantity field
-                const quantityInput = document.querySelector(`#itemRow${itemId} .quantity-input`);
-                quantityInput.focus();
-                quantityInput.select();
-
-                // Update stock info
-                updateStockInfo(itemId);
-            } else {
-                priceInput.value = 0;
-            }
-
-            updateTotal();
-        }
-
-        function updateStockInfo(itemId) {
-            const select = document.querySelector(`#itemRow${itemId} .medicine-select`);
-            const selectedOption = select.options[select.selectedIndex];
-            const quantityInput = document.querySelector(`#itemRow${itemId} .quantity-input`);
-            const stockInfo = document.getElementById(`stockInfo${itemId}`);
-
-            if (selectedOption.value) {
-                const stock = parseInt(selectedOption.getAttribute('data-stock')) || 0;
-                const quantity = parseInt(quantityInput.value) || 0;
-
-                if (stock > 0) {
-                    if (quantity > stock) {
-                        stockInfo.innerHTML = `<span class="text-red-500"><i class="fas fa-exclamation-triangle"></i> Only ${stock} available</span>`;
-                        quantityInput.style.borderColor = '#ef4444';
-                    } else {
-                        stockInfo.innerHTML = `<span class="text-green-600"><i class="fas fa-check-circle"></i> ${stock} available</span>`;
-                        quantityInput.style.borderColor = '';
-                    }
-                } else {
-                    stockInfo.innerHTML = `<span class="text-red-500"><i class="fas fa-exclamation-triangle"></i> Out of stock</span>`;
-                    quantityInput.style.borderColor = '#ef4444';
-                }
-            } else {
-                stockInfo.innerHTML = '';
-                quantityInput.style.borderColor = '';
-            }
         }
 
         function removeItemRow(itemId) {
@@ -666,6 +536,31 @@ if ($selected_medicine_id > 0) {
                 updateTotal();
                 updateItemCount();
             }
+        }
+
+        function updatePrice(itemId) {
+            const select = document.querySelector(`#itemRow${itemId} .medicine-select`);
+            const selectedOption = select.options[select.selectedIndex];
+            const priceInput = document.querySelector(`#itemRow${itemId} .price-input`);
+            const availableStockSpan = document.getElementById(`availableStock${itemId}`);
+
+            if (selectedOption.value) {
+                const price = selectedOption.getAttribute('data-price');
+                const stock = selectedOption.getAttribute('data-stock');
+
+                priceInput.value = price;
+                availableStockSpan.textContent = stock;
+
+                // Auto-focus quantity and select all text
+                const quantityInput = document.querySelector(`#itemRow${itemId} .quantity-input`);
+                quantityInput.focus();
+                quantityInput.select();
+            } else {
+                priceInput.value = 0;
+                availableStockSpan.textContent = 0;
+            }
+
+            updateTotal();
         }
 
         function updateTotal() {
@@ -687,23 +582,17 @@ if ($selected_medicine_id > 0) {
                 totalItems += quantity;
             });
 
-            // Calculate auto discount
-            const autoDiscount = calculateAutoDiscount(subtotal);
-            currentAutoDiscount = autoDiscount.amount;
-            currentAutoDiscountPercentage = autoDiscount.percentage;
+            // Get discount
+            const discount = parseFloat(document.getElementById('discount').value) || 0;
 
             // Calculate total
-            const total = Math.max(0, subtotal - currentAutoDiscount);
+            const total = Math.max(0, subtotal - discount);
 
             // Update display
             document.getElementById('subtotal').textContent = 'Rs' + subtotal.toFixed(2);
-            document.getElementById('discountDisplay').textContent = 'Rs' + currentAutoDiscount.toFixed(2);
+            document.getElementById('discountDisplay').textContent = 'Rs' + discount.toFixed(2);
             document.getElementById('totalAmount').textContent = 'Rs' + total.toFixed(2);
             document.getElementById('itemCount').textContent = totalItems;
-
-            // Update discount info
-            document.getElementById('autoDiscountRate').textContent = currentAutoDiscountPercentage + '%';
-            document.getElementById('appliedDiscountInfo').textContent = 'Auto-calculated (' + currentAutoDiscountPercentage + '%)';
         }
 
         function updateItemCount() {
@@ -764,16 +653,44 @@ if ($selected_medicine_id > 0) {
             }
         }
 
-        // Initialize with one empty item row or pre-filled medicine
-        document.addEventListener('DOMContentLoaded', function() {
-            if (selectedMedicine) {
-                // Pre-fill the selected medicine
-                addItemRow(selectedMedicine.id, 1, selectedMedicine.price || 0);
-            } else {
-                addItemRow();
-            }
+        // Barcode scanner functions
+        function startBarcodeScanner() {
+            document.getElementById('barcodeScanner').classList.add('scanner-active');
+            scannerActive = true;
+            document.getElementById('manualBarcode').focus();
 
+            // In a real implementation, you would initialize the barcode scanner here
+            console.log('Barcode scanner activated');
+        }
+
+        function stopBarcodeScanner() {
+            document.getElementById('barcodeScanner').classList.remove('scanner-active');
+            scannerActive = false;
+        }
+
+        function addByBarcode() {
+            const barcode = document.getElementById('manualBarcode').value;
+            if (!barcode) return;
+
+            // Simulate barcode lookup
+            const medicine = medicines.find(m => m.barcode === barcode);
+            if (medicine) {
+                addItemRow(medicine.id, 1, medicine.price);
+                document.getElementById('manualBarcode').value = '';
+                document.getElementById('manualBarcode').focus();
+            } else {
+                alert('Medicine not found with this barcode');
+            }
+        }
+
+        // Initialize with one empty item row
+        document.addEventListener('DOMContentLoaded', function() {
+            addItemRow();
             document.getElementById('quickSearch').focus();
+
+            // Update total when discount changes
+            document.getElementById('discount').addEventListener('input', updateTotal);
+            document.getElementById('discount').addEventListener('change', updateTotal);
 
             // Form validation
             document.getElementById('saleForm').addEventListener('submit', function(e) {
@@ -785,30 +702,15 @@ if ($selected_medicine_id > 0) {
                 }
 
                 let hasValidItem = false;
-                let stockError = false;
-
                 items.forEach(row => {
                     const medicineSelect = row.querySelector('.medicine-select');
                     const quantity = parseFloat(row.querySelector('.quantity-input').value) || 0;
                     const price = parseFloat(row.querySelector('.price-input').value) || 0;
 
                     if (medicineSelect.value && quantity > 0 && price > 0) {
-                        // Check if quantity exceeds available stock
-                        const selectedOption = medicineSelect.options[medicineSelect.selectedIndex];
-                        const availableStock = parseFloat(selectedOption.getAttribute('data-stock')) || 0;
-
-                        if (quantity > availableStock) {
-                            e.preventDefault();
-                            alert(`Quantity (${quantity}) exceeds available stock (${availableStock}) for selected medicine.`);
-                            stockError = true;
-                            return;
-                        }
-
                         hasValidItem = true;
                     }
                 });
-
-                if (stockError) return;
 
                 if (!hasValidItem) {
                     e.preventDefault();
@@ -816,7 +718,7 @@ if ($selected_medicine_id > 0) {
                 }
             });
 
-            // Keyboard shortcuts
+            // Keyboard shortcuts for quick operation
             document.addEventListener('keydown', function(e) {
                 // Ctrl/Cmd + Enter to submit
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -834,6 +736,11 @@ if ($selected_medicine_id > 0) {
                 if (e.key === 'F3') {
                     e.preventDefault();
                     document.getElementById('quickSearch').focus();
+                }
+
+                // Escape to close search results
+                if (e.key === 'Escape') {
+                    document.getElementById('searchResults').classList.add('hidden');
                 }
             });
         });
