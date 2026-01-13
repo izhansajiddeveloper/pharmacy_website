@@ -38,7 +38,7 @@ View all stock batches, quantities, expiry dates, and locations.
 
 Page to log payments, record expenses, and view financial reports.
 
-
+![payment page](https://github.com/izhansajiddeveloper/pharmacy_website/blob/8c8893783c75217fc39174dcc204f110b129d1a2/payment.png)
 
 
 🛒 Sales & Invoices
