@@ -51,7 +51,11 @@ Record sales, generate invoices, and track batch-wise stock deduction.
 Admin panel to manage users, payments, expenses, and overall analytics.
 ![admin dashboard](https://github.com/izhansajiddeveloper/pharmacy_website/blob/0c26af350f2b4ea486a15c1676c56658efefaf39/admin%20dashboard.png)
 
-💵
+ 📄 Report / Analytics Page
+Shows sales, stock, and return reports with filters and summaries for pharmacists and admins.
+
+![Report Page]()
+
 
 
 🚀 Key Features
