@@ -32,7 +32,7 @@ Search medicines using generic names for accurate identification.
 📦 Stock Management
 
 View all stock batches, quantities, expiry dates, and locations.
-
+![stock](https://github.com/izhansajiddeveloper/pharmacy_website/blob/6b5970176dc65ecef314c4163c93a86ef15c61dd/stock.png)
 
 🛠️ Add/Edit Stock
 
